@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<title>PayPaz 收款商户后台 · 登录</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+/* =========================================================================
+ * PayPaz 收款商户后台原型 · 登录页（登录 / 激活 / 忘记密码）；登录后进入 index.html
+ * 布局 / 组件与 Dev/Merchant Portal/index.html 保持一致（浅色侧边栏 + 深色顶栏，
+ * filter-card / table-card / badge / modal / toast 等类名直接复用）。
+ * 本期范围：仅法币代收（收款服务商充值 USDT 代币余额 → 下单锁定汇率冻结 → 三道核验确认收款即扣划结算）。
+ * 不做 Off Ramp / 法币直存 / 法币直取 / 放款卡 —— 这些是同一个业务方演示原型里的其它业务线，
+ * 这期不在范围内。
+ * ========================================================================= */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans SC','Inter',sans-serif; background:#F5F7FA; color:#303133; height:100vh; display:flex; overflow:hidden; }
+
+/* ── Sidebar ─────────────────────────────────────── */
+.sidebar { width:190px; min-width:190px; background:#fff; display:flex; flex-direction:column; height:100vh; flex-shrink:0; transition:width 0.2s ease; overflow:hidden; }
+.sidebar.collapsed { width:56px; min-width:56px; }
+.logo-area { height:56px; background:#1a2236; display:flex; align-items:center; gap:8px; padding:0 16px; flex-shrink:0; white-space:nowrap; overflow:hidden; }
+.logo-badge { width:26px; height:26px; border-radius:6px; background:#409EFF; color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; font-family:'Inter',sans-serif; flex-shrink:0; }
+.logo-text { font-family:'Inter',sans-serif; font-size:15px; font-weight:700; color:#fff; }
+.sidebar.collapsed .logo-area { justify-content:center; padding:0; }
+.sidebar.collapsed .logo-text { display:none; }
+
+.nav-scroll { flex:1; overflow-y:auto; overflow-x:hidden; padding:6px 0; border-right:1px solid #EBEEF5; }
+.nav-scroll::-webkit-scrollbar { width:0; }
+
+.nav-item { height:44px; display:flex; align-items:center; gap:10px; padding:0 12px; cursor:pointer; position:relative; transition:background 0.15s; user-select:none; margin:1px 8px; border-radius:6px; }
+.nav-item:hover:not(.active) { background:#F5F7FA; }
+.nav-item .nav-icon { color:#909399; flex-shrink:0; }
+.nav-item .nav-label { font-size:13px; color:#606266; white-space:nowrap; flex:1; }
+.nav-item .nav-chevron { color:#C0C4CC; flex-shrink:0; transition:transform 0.2s; }
+.nav-item.active { background:#ECF5FF; }
+.nav-item.active .nav-icon { color:#409EFF; }
+.nav-item.active .nav-label { color:#409EFF; font-weight:500; }
+.nav-item.open .nav-chevron { transform:rotate(90deg); }
+.nav-badge { background:#F56C6C; color:#fff; font-size:11px; font-family:'Inter',sans-serif; font-weight:600; min-width:16px; height:16px; border-radius:8px; display:flex; align-items:center; justify-content:center; padding:0 4px; flex-shrink:0; }
+
+.nav-sub { display:none; background:#fff; }
+.nav-sub.open { display:block; }
+.nav-sub-item { height:38px; display:flex; align-items:center; padding:0 12px 0 38px; font-size:12px; color:#909399; cursor:pointer; transition:background 0.15s,color 0.15s; margin:1px 8px; border-radius:6px; }
+.nav-sub-item:hover { background:#F5F7FA; color:#606266; }
+.nav-sub-item.active { color:#409EFF; background:#ECF5FF; }
+
+.sidebar-toggle { height:48px; display:flex; align-items:center; justify-content:flex-end; padding:0 16px; border-top:1px solid #EBEEF5; border-right:1px solid #EBEEF5; cursor:pointer; flex-shrink:0; transition:background 0.15s; }
+.sidebar-toggle:hover { background:#F5F7FA; }
+.sidebar-toggle .toggle-icon { color:#C0C4CC; }
+.sidebar.collapsed .sidebar-toggle { justify-content:center; padding:0; }
+.sidebar.collapsed .nav-label { display:none; }
+.sidebar.collapsed .nav-chevron { display:none; }
+.sidebar.collapsed .nav-badge { display:none; }
+.sidebar.collapsed .nav-sub { display:none !important; }
+.sidebar.collapsed .nav-item { padding:0; justify-content:center; margin:1px 4px; }
+
+/* ── Main Area ───────────────────────────────────── */
+.main-area { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+.header-bar { height:56px; background:#1a2236; display:flex; align-items:center; justify-content:flex-end; padding:0 20px; gap:14px; flex-shrink:0; }
+.header-icon { color:#8a9ab5; cursor:pointer; display:flex; align-items:center; }
+.header-icon:hover { color:#fff; }
+
+/* ── Header action dropdowns（对齐生产环境 paypaz-admin-web：UserDropdown + AppLocalePicker）── */
+.header-action { position:relative; }
+.header-action-trigger { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; transition:background .15s; }
+.header-action-trigger:hover { background:rgba(255,255,255,.12); }
+.header-dropdown { display:none; position:absolute; top:44px; right:0; background:#fff; border-radius:6px; box-shadow:0 6px 24px rgba(0,0,0,.18); z-index:100; }
+.header-dropdown.show { display:block; }
+.user-dropdown-panel { width:210px; padding:16px 16px 4px; }
+.user-info-row { display:flex; align-items:center; gap:12px; padding-bottom:14px; }
+.user-info-row img { width:30px; height:30px; border-radius:50%; flex-shrink:0; }
+.user-info-name { font-size:13px; font-weight:600; color:#303133; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:130px; }
+.user-info-uid { font-size:12px; color:#909399; display:flex; align-items:center; gap:5px; margin-top:2px; }
+.user-info-uid svg { width:13px; height:13px; cursor:pointer; }
+.user-info-verified { display:inline-flex; align-items:center; gap:3px; font-size:11px; color:#67C23A; margin-top:3px; }
+.dm-divider { height:1px; background:#EBEEF5; margin:0 -16px; }
+.dm-item { display:flex; align-items:center; gap:10px; padding:12px 4px; font-size:13px; color:#303133; cursor:pointer; border-radius:4px; }
+.dm-item:hover { background:#F5F7FA; }
+.dm-item svg { width:16px; height:16px; color:#606266; }
+.locale-dropdown-panel { width:160px; padding:6px; }
+.locale-item { display:flex; align-items:center; justify-content:space-between; width:100%; height:44px; padding:0 10px; font-size:13px; color:#303133; cursor:pointer; border-radius:4px; }
+.locale-item:hover { background:#F5F7FA; }
+.locale-item svg { width:16px; height:16px; color:#1ACA75; visibility:hidden; }
+.locale-item.active svg { visibility:visible; }
+
+/* ── Login screen（对齐生产环境 paypaz-admin-web 登录页）── */
+.login-header { position:fixed; top:0; left:0; z-index:9; display:flex; align-items:center; justify-content:space-between; width:100%; height:72px; padding:0 32px; background:#000; border-bottom:1px solid #151515; box-sizing:border-box; }
+.login-header img { height:28px; }
+.login-screen { display:none; width:100%; height:100vh; padding-top:72px; overflow:hidden; background:#f9f9f9; position:relative; box-sizing:border-box; }
+.login-screen.active { display:flex; }
+.login-img-parent { z-index:1; width:50%; display:flex; align-items:center; justify-content:center; background:#020409; }
+.login-img-parent img { width:574px; max-width:80%; }
+.login-form-parent { width:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; transform:translateY(-6%); }
+.login-welcome { font-size:24px; font-weight:500; color:#303133; }
+.login-form-box { width:430px; max-width:88vw; margin-top:16px; padding:24px 24px 20px; background:#fff; border-radius:16px; box-shadow:10px 19px 60px rgba(0,0,0,.12); display:flex; flex-direction:column; }
+.login-field { margin-bottom:16px; }
+.login-field-label { font-size:13px; color:#303133; margin-bottom:8px; display:block; }
+.login-field-label .req { color:#F56C6C; margin-right:2px; }
+.login-input-wrap { position:relative; }
+.login-input { height:36px; width:100%; border:1px solid #DCDFE6; border-radius:4px; padding:0 34px 0 11px; font-size:13px; font-family:'Noto Sans SC',sans-serif; outline:none; transition:border-color .2s; }
+.login-input:focus { border-color:#435DDD; }
+.login-input.is-error { border-color:#F56C6C; }
+.login-eye { position:absolute; right:10px; top:50%; transform:translateY(-50%); color:#909399; cursor:pointer; display:flex; }
+.login-field-err { font-size:12px; color:#F56C6C; margin-top:5px; display:none; }
+.login-forgot { align-self:flex-start; font-size:13px; color:#435DDD; background:none; border:none; cursor:pointer; padding:0; margin:2px 0 14px; }
+.login-forgot:hover { opacity:.8; }
+.login-submit { height:40px; width:100%; background:#435DDD; color:#fff; border:none; border-radius:4px; font-size:14px; font-weight:500; cursor:pointer; font-family:'Noto Sans SC',sans-serif; transition:opacity .15s; }
+.login-submit:hover { opacity:.9; }
+
+.page { display:none; flex:1; flex-direction:column; overflow:hidden; min-height:0; }
+.page.active { display:flex; }
+.content-area { flex:1; padding:20px; display:flex; flex-direction:column; gap:16px; overflow-y:auto; overflow-x:hidden; }
+.page-title { font-size:16px; font-weight:600; color:#303133; }
+.page-desc { font-size:12px; color:#909399; margin-top:2px; }
+
+/* ── Overview: Stat Card ─────────────────────────── */
+.stat-card { background:#fff; border:1px solid #EBEEF5; border-radius:4px; padding:20px 24px; }
+.section-label { font-size:13px; color:#606266; font-weight:500; }
+.stat-row { display:flex; align-items:center; gap:32px; margin-top:16px; flex-wrap:wrap; }
+.stat-item { display:flex; flex-direction:column; gap:6px; }
+.stat-label { font-size:12px; color:#909399; }
+.stat-value { font-family:'Inter',sans-serif; font-size:26px; font-weight:700; color:#303133; line-height:1.2; }
+.stat-value .stat-unit { font-size:14px; font-weight:400; color:#606266; margin-left:4px; }
+.stat-sub { font-size:12px; color:#909399; }
+.stat-sep { width:1px; height:48px; background:#EBEEF5; flex-shrink:0; }
+.stat-spacer { flex:1; }
+.stat-actions { display:flex; gap:8px; }
+
+/* ── Overview: Progress Cards ────────────────────── */
+.section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.progress-cards { display:flex; gap:12px; }
+.progress-card { flex:1; border-radius:4px; padding:16px 20px; cursor:pointer; transition:opacity 0.15s; }
+.progress-card:hover { opacity:0.85; }
+.progress-card-warning { background:#fdf6ec; border:1px solid #faecd8; }
+.progress-card-info    { background:#ECF5FF; border:1px solid #D9ECFF; }
+.progress-card-danger  { background:#FEF0F0; border:1px solid #fde2e2; }
+.progress-card-title { font-size:12px; color:#606266; margin-bottom:10px; }
+.progress-card-count { font-family:'Inter',sans-serif; font-size:24px; font-weight:700; line-height:1.2; margin-bottom:4px; }
+.progress-card-warning .progress-card-count { color:#E6A23C; }
+.progress-card-info    .progress-card-count { color:#409EFF; }
+.progress-card-danger  .progress-card-count { color:#F56C6C; }
+.progress-card-count span { font-size:13px; font-weight:400; color:#606266; margin-left:2px; font-family:'Noto Sans SC',sans-serif; }
+.progress-card-amount { font-size:12px; color:#909399; font-family:'Inter',sans-serif; }
+
+/* ── Quick entry ─────────────────────────────────── */
+.quick-entry { display:flex; gap:10px; flex-wrap:wrap; }
+
+/* ── Filter Card ─────────────────────────────────── */
+.filter-card { background:#fff; border:1px solid #EBEEF5; border-radius:4px; padding:20px; display:flex; flex-direction:column; gap:16px; flex-shrink:0; }
+.filter-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px 20px; }
+.filter-item { display:flex; align-items:center; height:32px; min-width:0; }
+.filter-item.col-span-2 { grid-column:span 2; }
+.filter-label-el { flex-shrink:0; width:70px; text-align:right; padding-right:8px; font-size:13px; color:#606266; white-space:nowrap; }
+.filter-control { flex:1; min-width:0; display:flex; align-items:center; }
+.filter-control .field-input, .filter-control .field-select { width:100%; }
+.filter-actions { display:flex; justify-content:flex-end; align-items:center; gap:8px; padding-top:6px; border-top:1px solid #F2F6FC; }
+
+/* ── Inputs & Buttons ────────────────────────────── */
+.field-input,.field-select { height:32px; border:1px solid #DCDFE6; border-radius:4px; padding:0 10px; font-size:13px; color:#303133; background:#fff; outline:none; font-family:'Noto Sans SC',sans-serif; transition:border-color 0.2s; appearance:none; -webkit-appearance:none; }
+.field-input::placeholder { color:#C0C4CC; }
+.field-input:focus,.field-select:focus { border-color:#409EFF; }
+.field-input.f-readonly { background:#F5F7FA; color:#909399; cursor:default; }
+.field-input.is-error { border-color:#F56C6C; }
+.select-wrap { position:relative; display:inline-flex; align-items:center; }
+.select-wrap .select-caret { position:absolute; right:8px; pointer-events:none; color:#C0C4CC; }
+.field-select { padding-right:28px; cursor:pointer; }
+.field-hint { font-size:12px; color:#909399; margin-top:5px; }
+.field-err { font-size:12px; color:#F56C6C; margin-top:5px; display:none; }
+
+.btn { height:32px; padding:0 15px; border-radius:4px; font-size:13px; font-family:'Noto Sans SC',sans-serif; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px; border:none; white-space:nowrap; transition:opacity 0.15s; }
+.btn:hover { opacity:0.85; }
+.btn-primary { background:#409EFF; color:#fff; }
+.btn-default { background:#fff; color:#606266; border:1px solid #DCDFE6; }
+.btn-danger  { background:#F56C6C; color:#fff; }
+.btn-sm { height:28px; padding:0 16px; font-size:13px; }
+.btn:disabled { cursor:not-allowed; opacity:1; }
+.btn-primary:disabled { background:#a0cfff; }
+.btn-chip { height:34px; padding:0 14px; border-radius:6px; border:1.5px solid #DCDFE6; background:#fff; color:#606266; font-size:13px; cursor:pointer; transition:border-color .15s,background .15s,color .15s; font-family:'Noto Sans SC',sans-serif; }
+.btn-chip:hover { border-color:#A0CFFF; }
+.btn-chip.selected { border-color:#409EFF; background:#ECF5FF; color:#409EFF; font-weight:500; }
+.btn-chip.disabled-chan { border-color:#fde2e2; background:#FEF0F0; color:#F56C6C; cursor:not-allowed; opacity:.75; }
+
+/* ── Table Card ──────────────────────────────────── */
+.table-card { background:#fff; border:1px solid #EBEEF5; border-radius:4px; display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+.summary-bar { min-height:48px; display:flex; align-items:center; gap:16px; padding:10px 20px; border-bottom:1px solid #EBEEF5; flex-shrink:0; flex-wrap:wrap; }
+.summary-bar .count-label { font-size:13px; color:#606266; }
+.summary-bar .count-value { font-size:13px; font-weight:600; color:#303133; }
+.summary-spacer { flex:1; }
+.tab-chips { display:flex; gap:8px; }
+.tab-chip { height:30px; padding:0 14px; border-radius:15px; border:1px solid #DCDFE6; background:#fff; color:#606266; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:5px; }
+.tab-chip.active { background:#409EFF; border-color:#409EFF; color:#fff; }
+.tab-chip .cnt { font-family:'Inter',sans-serif; font-weight:600; }
+.table-wrap { flex:1; overflow-x:auto; overflow-y:auto; }
+table { width:100%; border-collapse:collapse; table-layout:fixed; }
+thead tr { background:#F5F7FA; border-bottom:1px solid #EBEEF5; }
+th { height:44px; padding:0 12px; text-align:left; font-size:13px; font-weight:600; color:#606266; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+tbody tr { border-bottom:1px solid #EBEEF5; transition:background 0.1s; }
+tbody tr:hover { background:#F5F7FA !important; }
+tbody tr:nth-child(odd)  { background:#fff; }
+tbody tr:nth-child(even) { background:#FAFAFA; }
+td { height:52px; padding:0 12px; font-size:13px; color:#303133; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
+.cell-empty  { color:#C0C4CC; font-family:'Inter',sans-serif; }
+.asset-num   { font-family:'Inter',sans-serif; }
+.cell-sub { font-size:11px; color:#909399; font-family:'Inter',sans-serif; }
+.copy-cell   { display:flex; align-items:center; gap:6px; overflow:hidden; }
+.copy-cell span { overflow:hidden; text-overflow:ellipsis; font-family:'Inter',sans-serif; }
+.copy-icon { color:#409EFF; cursor:pointer; flex-shrink:0; display:flex; align-items:center; transition:opacity 0.15s; }
+.copy-icon:hover { opacity:0.7; }
+.action-cell { display:flex; align-items:center; gap:10px; }
+.action-icon { color:#409EFF; cursor:pointer; display:flex; align-items:center; transition:opacity 0.15s; }
+.action-icon:hover { opacity:0.7; }
+.action-icon.danger { color:#F56C6C; }
+.action-icon.disabled { color:#C0C4CC; cursor:not-allowed; pointer-events:none; }
+.chan-tag { display:inline-flex; align-items:center; padding:2px 6px; border-radius:3px; font-size:11px; background:#F5F7FA; color:#606266; margin:1px 3px 1px 0; }
+
+/* ── Badges ──────────────────────────────────────── */
+.badge { display:inline-flex; align-items:center; justify-content:center; padding:3px 8px; border-radius:3px; font-size:12px; white-space:nowrap; }
+.badge-green  { background:#f0f9ea; color:#67C23A; }
+.badge-red    { background:#FEF0F0; color:#F56C6C; }
+.badge-gray   { background:#f4f4f5; color:#909399; }
+.badge-blue   { background:#ECF5FF; color:#409EFF; border:1px solid #D9ECFF; }
+.badge-orange { background:#fdf6ec; color:#E6A23C; border:1px solid #faecd8; }
+
+/* ── Modal ───────────────────────────────────────── */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
+.modal-overlay.show { display:flex; }
+#captchaModal { z-index:1100; }
+#appShell { flex:1; min-width:0; }
+.modal { background:#fff; border-radius:6px; width:560px; max-width:92vw; max-height:88vh; box-shadow:0 12px 40px rgba(0,0,0,0.18); overflow:hidden; display:flex; flex-direction:column; }
+.modal-header { height:54px; padding:0 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #EBEEF5; flex-shrink:0; }
+.modal-title { font-size:15px; font-weight:600; color:#303133; }
+.modal-close { cursor:pointer; color:#909399; display:flex; align-items:center; }
+.modal-close:hover { color:#606266; }
+.modal-body { padding:22px 20px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:18px; }
+.modal-footer { padding:12px 20px; border-top:1px solid #EBEEF5; display:flex; justify-content:flex-end; gap:8px; flex-shrink:0; }
+.form-field-label { display:block; font-size:13px; color:#303133; font-weight:500; margin-bottom:8px; }
+.form-field-label .req { color:#F56C6C; margin-right:2px; }
+.edit-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.alert-box { display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border-radius:4px; font-size:13px; line-height:1.6; }
+.alert-info    { background:#ECF5FF; border:1px solid #D9ECFF; color:#409EFF; }
+.alert-warning { background:#fdf6ec; border:1px solid #faecd8; color:#E6A23C; }
+.alert-danger  { background:#FEF0F0; border:1px solid #fbc4c4; color:#F56C6C; }
+.alert-box .alert-icon { flex-shrink:0; margin-top:1px; }
+.otp-input { width:44px !important; height:44px; text-align:center; font-size:18px; padding:0 !important; }
+.captcha-track { position:relative; height:40px; background:#F5F7FA; border:1px solid #DCDFE6; border-radius:4px; overflow:hidden; user-select:none; }
+.captcha-track-fill { position:absolute; top:0; left:0; height:100%; width:0; background:#D9ECFF; }
+.captcha-track-text { position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:13px; color:#909399; pointer-events:none; }
+.captcha-handle { position:absolute; top:0; left:0; width:40px; height:40px; background:#fff; border:1px solid #DCDFE6; border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:grab; color:#606266; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+.captcha-handle.success { background:#67C23A; border-color:#67C23A; color:#fff; }
+.chip-group { display:flex; flex-wrap:wrap; gap:8px; }
+
+/* ── Element Checkbox ────────────────────────────── */
+.el-checkbox { display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none; }
+.el-checkbox__original { position:absolute; width:0; height:0; opacity:0; margin:0; }
+.el-checkbox__inner { display:block; position:relative; width:15px; height:15px; border:1px solid #DCDFE6; border-radius:2px; background:#FFFFFF; box-sizing:border-box; transition:border-color .2s,background-color .2s; flex-shrink:0; }
+.el-checkbox__inner::after { box-sizing:content-box; content:''; border:1.5px solid #FFFFFF; border-left:0; border-top:0; height:7px; width:3px; left:4px; top:1px; position:absolute; transform:rotate(45deg) scaleY(0); transition:transform .15s ease-in .05s; transform-origin:center; }
+.el-checkbox:hover .el-checkbox__inner { border-color:#409EFF; }
+.el-checkbox__original:checked + .el-checkbox__inner { background-color:#409EFF; border-color:#409EFF; }
+.el-checkbox__original:checked + .el-checkbox__inner::after { transform:rotate(45deg) scaleY(1); }
+.el-checkbox__label { font-size:13px; color:#303133; line-height:1.6; }
+.el-checkbox.danger .el-checkbox__original:checked + .el-checkbox__inner { background-color:#F56C6C; border-color:#F56C6C; }
+.el-checkbox.danger:hover .el-checkbox__inner { border-color:#F56C6C; }
+
+/* ── Toast ───────────────────────────────────────── */
+.toast { position:fixed; top:24px; left:50%; transform:translateX(-50%) translateY(-120px); background:#fff; border:1px solid #EBEEF5; border-radius:4px; padding:10px 20px; font-size:13px; color:#606266; box-shadow:0 4px 16px rgba(0,0,0,0.12); transition:transform 0.25s ease; z-index:9999; display:flex; align-items:center; gap:8px; max-width:480px; }
+.toast.show { transform:translateX(-50%) translateY(0); }
+.toast-icon-success { color:#67C23A; }
+.toast-icon-error   { color:#F56C6C; }
+
+/* ── Order Review Drawer (right slide-in, this system's only drawer) ── */
+.drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.42); z-index:900; display:none; }
+.drawer-mask.show { display:block; }
+.drawer { position:fixed; top:0; right:0; bottom:0; width:460px; max-width:92vw; background:#fff; box-shadow:-8px 0 30px rgba(0,0,0,.15); z-index:901; display:flex; flex-direction:column; transform:translateX(100%); transition:transform .25s ease; }
+.drawer.show { transform:translateX(0); }
+.drawer-header { padding:18px 20px; border-bottom:1px solid #EBEEF5; flex-shrink:0; }
+.drawer-title { font-size:15px; font-weight:600; color:#303133; display:flex; align-items:center; justify-content:space-between; }
+.drawer-sub { font-size:12px; color:#909399; margin-top:4px; }
+.drawer-close { cursor:pointer; color:#909399; display:flex; }
+.drawer-close:hover { color:#606266; }
+.drawer-body { flex:1; overflow-y:auto; padding:18px 20px; display:flex; flex-direction:column; gap:16px; }
+.drawer-footer { padding:14px 20px; border-top:1px solid #EBEEF5; flex-shrink:0; display:flex; flex-direction:column; gap:8px; }
+.drawer-meta { background:#F5F7FA; border-radius:4px; padding:4px 14px; }
+.drawer-meta-row { display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid #EBEEF5; }
+.drawer-meta-row:last-child { border-bottom:none; }
+.drawer-meta-label { font-size:12px; color:#909399; }
+.drawer-meta-value { font-size:13px; font-weight:600; color:#303133; font-family:'Inter','Noto Sans SC',sans-serif; }
+.check-step { border:1px solid #EBEEF5; border-radius:6px; padding:14px 16px; }
+.check-step.passed { border-color:#c2e7b0; background:#f7fcf4; }
+.check-step-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.check-step-num { width:20px; height:20px; border-radius:50%; background:#909399; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-family:'Inter',sans-serif; }
+.check-step.passed .check-step-num { background:#67C23A; }
+.check-step-title { font-size:13px; font-weight:600; color:#303133; flex:1; }
+.check-step-status { font-size:12px; color:#C0C4CC; }
+.check-step.passed .check-step-status { color:#67C23A; }
+.check-step-desc { font-size:12px; color:#909399; line-height:1.7; margin-bottom:10px; }
+.proof-card { background:#F5F7FA; border-radius:6px; padding:14px; }
+.proof-card-head { font-size:12px; font-weight:600; color:#606266; margin-bottom:8px; }
+.proof-row { display:flex; justify-content:space-between; padding:5px 0; font-size:12px; }
+.proof-row .k { color:#909399; }
+.proof-row .v { color:#303133; font-weight:500; font-family:'Inter','Noto Sans SC',sans-serif; }
+.proof-meta { font-size:11px; color:#C0C4CC; margin-top:8px; }
+.match-hint { font-size:12px; margin-top:8px; display:flex; align-items:center; gap:5px; }
+.match-hint.ok { color:#67C23A; }
+.match-hint.warn { color:#E6A23C; }
+.drawer-summary { font-size:12px; color:#909399; background:#F5F7FA; border-radius:4px; padding:10px 12px; line-height:1.7; }
+.drawer-summary.ready { color:#67C23A; background:#f0f9eb; }
+.drawer-summary.locked { color:#F56C6C; background:#FEF0F0; }
+
+/* ── 用户与权限（复用 Merchant Portal 的用户列表/详情/编辑/权限树结构） ── */
+.sub-header { display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.breadcrumb-sub { display:flex; align-items:center; gap:6px; font-size:13px; }
+.bc-link { color:#409EFF; cursor:pointer; }
+.bc-link:hover { opacity:0.8; }
+.bc-sep3 { color:#C0C4CC; }
+.bc-cur { color:#303133; }
+
+.info-card { background:#fff; border:1px solid #EBEEF5; border-radius:4px; padding:24px; flex-shrink:0; }
+.info-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px 40px; }
+.info-item { display:flex; flex-direction:column; gap:6px; }
+.info-item-label { font-size:12px; color:#909399; }
+.info-item-value { font-size:13px; color:#303133; display:flex; align-items:center; gap:8px; }
+.info-item-value.inter { font-family:'Inter',sans-serif; }
+
+.edit-col { display:flex; flex-direction:column; gap:6px; }
+.edit-label { font-size:12px; color:#606266; }
+.edit-row.single-col { grid-template-columns:1fr; }
+
+.radio-group { display:flex; align-items:center; gap:24px; height:32px; }
+.el-radio { display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none; }
+.el-radio__input { position:relative; display:inline-block; width:14px; height:14px; flex-shrink:0; }
+.el-radio__original { position:absolute; width:0; height:0; opacity:0; margin:0; }
+.el-radio__inner { display:block; width:14px; height:14px; border:1px solid #DCDFE6; border-radius:50%; background:#FFFFFF; transition:border-color .25s,background-color .25s; position:relative; }
+.el-radio:hover .el-radio__inner { border-color:#409EFF; }
+.el-radio__original:checked + .el-radio__inner { background-color:#409EFF; border-color:#409EFF; }
+.el-radio__original:checked + .el-radio__inner::after { content:''; position:absolute; width:4px; height:4px; border-radius:50%; background:#FFFFFF; top:50%; left:50%; transform:translate(-50%,-50%); }
+.el-radio__label { font-size:13px; color:#606266; line-height:1; }
+
+.el-checkbox--ro { pointer-events:none; cursor:default; }
+.el-checkbox--ro .el-checkbox__inner { background-color:#F5F7FA; border-color:#DCDFE6; }
+.el-checkbox--ro .el-checkbox__original:checked + .el-checkbox__inner { background-color:#A0CFFF; border-color:#A0CFFF; }
+.el-checkbox--ro .el-checkbox__original:checked + .el-checkbox__inner::after { transform:rotate(45deg) scaleY(1); }
+.el-checkbox--ro .el-checkbox__original:indeterminate + .el-checkbox__inner { background-color:#A0CFFF; border-color:#A0CFFF; }
+
+.perm-section { background:#fff; border:1px solid #EBEEF5; border-radius:4px; overflow:hidden; flex-shrink:0; }
+.perm-section-title { font-size:14px; font-weight:600; color:#303133; padding:12px 20px; border-bottom:1px solid #EBEEF5; display:flex; align-items:center; gap:10px; }
+.perm-table { width:100%; border-collapse:collapse; }
+.perm-row { border-bottom:1px solid #F5F7FA; }
+.perm-row:last-child { border-bottom:none; }
+.perm-module { width:200px; padding:10px 16px 10px 32px; font-size:13px; color:#606266; white-space:nowrap; vertical-align:middle; border-right:1px solid #F5F7FA; }
+.perm-ops-cell { padding:10px 20px; vertical-align:middle; }
+.perm-ops { display:flex; flex-wrap:wrap; gap:8px 28px; align-items:center; min-height:32px; }
+
+.modal-detail-row { display:grid; grid-template-columns:80px 1fr 80px 1fr; gap:12px 8px; align-items:center; font-size:13px; }
+.modal-detail-label { color:#909399; }
+.modal-detail-value { color:#303133; font-weight:500; }
+
+/* ── Lucide icon sizing (CSS wins over any size=/width= attr the CDN build ignores) ── */
+svg.lucide { stroke-width:1.5; display:block; }
+.nav-icon, .nav-chevron, .toggle-icon, .select-caret, .copy-icon svg, .action-icon svg, .header-icon svg, .header-action-trigger svg { width:16px; height:16px; }
+.nav-chevron, .select-caret { width:14px; height:14px; }
+.check-step-head svg { width:15px; height:15px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════
+     登录页（对齐生产环境 paypaz-admin-web/src/views/System/Login）
+══════════════════════════════════════════════════════ -->
+<div class="login-header">
+  <img src="images/logo.png" alt="PayPaz">
+  <div class="header-action">
+    <div class="header-action-trigger" onclick="toggleDropdown('loginLocaleDropdown', event)"><i data-lucide="globe"></i></div>
+    <div class="header-dropdown" id="loginLocaleDropdown">
+      <div class="locale-dropdown-panel" id="loginLocaleList"></div>
+    </div>
+  </div>
+</div>
+<div class="login-screen active" id="loginScreen">
+  <div class="login-img-parent"><img src="images/login-bg.png" alt=""></div>
+  <div class="login-form-parent">
+    <div class="login-welcome" id="t-PayPazWelcome">欢迎来到PayPaz</div>
+    <div class="login-form-box">
+      <div class="alert-box" id="loginNotice" style="display:none;margin-bottom:16px;"></div>
+      <div class="login-field">
+        <label class="login-field-label"><span class="req">*</span><span id="t-emialOrAccountLabel">邮箱/账号</span></label>
+        <input class="login-input" id="loginEmail" placeholder="请输入邮箱或者账号" oninput="clearLoginError('loginEmail')">
+        <div class="login-field-err" id="loginEmailErr">请输入邮箱/账号</div>
+      </div>
+      <div class="login-field" style="margin-bottom:6px">
+        <label class="login-field-label"><span class="req">*</span><span id="t-passwordLabel">密码</span></label>
+        <div class="login-input-wrap">
+          <input class="login-input" type="password" id="loginPassword" placeholder="请输入密码" oninput="clearLoginError('loginPassword')">
+          <span class="login-eye" onclick="toggleLoginPwd()"><i data-lucide="eye-off" id="loginEyeIcon" style="width:15px;height:15px"></i></span>
+        </div>
+        <div class="login-field-err" id="loginPasswordErr">请输入密码</div>
+      </div>
+      <button class="login-forgot" id="t-forgotPassword" onclick="showForgotScreen()">忘记密码?</button>
+      <button class="login-submit" id="t-loginBtn" onclick="handleLogin()">登录</button>
+      <div style="margin-top:16px;font-size:12px;color:#C0C4CC;text-align:center;">
+        仅用于原型演示：<a href="javascript:void(0)" style="color:#409EFF" onclick="showActivationScreen('form')">查看激活页</a>
+        ·
+        <a href="javascript:void(0)" style="color:#409EFF" onclick="showActivationScreen('expired')">查看链接已过期</a>
+      </div>
+      <div style="margin-top:6px;font-size:12px;color:#C0C4CC;text-align:center;">
+        子账号（主账号邀请）：<a href="javascript:void(0)" style="color:#409EFF" onclick="showActivationScreen('form','member')">查看激活页</a>
+        ·
+        <a href="javascript:void(0)" style="color:#409EFF" onclick="showActivationScreen('expired','member')">查看链接已过期</a>
+      </div>
+      <div style="margin-top:6px;font-size:12px;color:#C0C4CC;text-align:center;">
+        模拟登录状态（含安全验证）：<a href="javascript:void(0)" style="color:#409EFF" onclick="demoLoginAs('wrongpwd@test.com')">密码错误</a>
+        ·
+        <a href="javascript:void(0)" style="color:#409EFF" onclick="demoLoginAs('locked@test.com')">账号已锁定</a>
+        ·
+        <a href="javascript:void(0)" style="color:#409EFF" onclick="demoLoginAs('inactive@test.com')">账号未激活</a>
+        ·
+        <a href="javascript:void(0)" style="color:#409EFF" onclick="demoLoginAs('disabled@test.com')">账号已禁用</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     激活页（点击邀请邮件中的链接后打开，对应 PRD 4.4 账户 › 激活）
+     - 主账号：Paypaz 运营邀请收款服务商
+     - 子账号：收款服务商主账号在「系统设置 › 用户与权限」邀请内部用户；与主账号共用本页，只是展示信息不同
+══════════════════════════════════════════════════════ -->
+<div class="login-screen" id="activationScreen">
+  <div class="login-img-parent"><img src="images/login-bg.png" alt=""></div>
+  <div class="login-form-parent">
+
+    <!-- 有效邀请：设置密码表单 -->
+    <div id="activationFormBlock">
+      <div class="login-welcome">激活您的 PayPaz 账户</div>
+      <div style="font-size:13px;color:#909399;margin-top:4px;margin-bottom:20px;" id="actSubtitle">请核对以下信息并设置登录密码，完成后将自动登录</div>
+      <div class="login-form-box">
+        <div class="login-field">
+          <label class="login-field-label" id="actMerchantLabel">收款服务商名称</label>
+          <input class="login-input" id="actMerchantName" value="sunrise-settle" readonly style="background:#F5F7FA;color:#606266;">
+        </div>
+        <div class="login-field" id="actUserNameField" style="display:none">
+          <label class="login-field-label">用户名</label>
+          <input class="login-input" id="actUserName" value="" readonly style="background:#F5F7FA;color:#606266;">
+        </div>
+        <div class="login-field">
+          <label class="login-field-label">邮箱</label>
+          <input class="login-input" id="actMerchantEmail" value="ops@sunrise-settle.com" readonly style="background:#F5F7FA;color:#606266;">
+        </div>
+        <div class="login-field">
+          <label class="login-field-label"><span class="req">*</span>设置密码</label>
+          <div class="login-input-wrap">
+            <input class="login-input" type="password" id="actPassword" placeholder="请输入密码" oninput="clearLoginError('actPassword')">
+            <span class="login-eye" onclick="toggleActivationPwd('actPassword','actPwdEyeIcon')"><i data-lucide="eye-off" id="actPwdEyeIcon" style="width:15px;height:15px"></i></span>
+          </div>
+          <div class="login-field-err" id="actPasswordErr">请输入密码</div>
+        </div>
+        <div class="login-field" style="margin-bottom:6px">
+          <label class="login-field-label"><span class="req">*</span>确认密码</label>
+          <div class="login-input-wrap">
+            <input class="login-input" type="password" id="actPasswordConfirm" placeholder="请再次输入密码" oninput="clearLoginError('actPasswordConfirm')">
+            <span class="login-eye" onclick="toggleActivationPwd('actPasswordConfirm','actPwdConfirmEyeIcon')"><i data-lucide="eye-off" id="actPwdConfirmEyeIcon" style="width:15px;height:15px"></i></span>
+          </div>
+          <div class="login-field-err" id="actPasswordConfirmErr">两次输入的密码不一致</div>
+        </div>
+        <button class="login-submit" onclick="submitActivation()">确认激活并登录</button>
+      </div>
+    </div>
+
+    <!-- 邀请链接已过期 -->
+    <div id="activationExpiredBlock" style="display:none;text-align:center;">
+      <div style="width:56px;height:56px;border-radius:50%;background:#FEF0F0;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+        <i data-lucide="alert-triangle" style="width:26px;height:26px;color:#F56C6C;"></i>
+      </div>
+      <div class="login-welcome" style="font-size:18px;">邀请链接已过期</div>
+      <div style="font-size:13px;color:#909399;margin-top:10px;max-width:320px;line-height:1.7;" id="actExpiredTip">
+        链接已失效，请联系 Paypaz 管理员重新发送邀请
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     忘记密码（邮箱 → 验证码 → 设置新密码，对齐生产环境
+     paypaz-admin-web/src/views/System/Forget）
+══════════════════════════════════════════════════════ -->
+<div class="login-screen" id="forgotScreen">
+  <div class="login-img-parent"><img src="images/login-bg.png" alt=""></div>
+  <div class="login-form-parent">
+
+    <!-- Step 0：输入邮箱 -->
+    <div id="forgotStep0">
+      <div class="login-welcome" style="font-size:20px;">重置密码</div>
+      <div style="font-size:13px;color:#909399;margin-top:4px;margin-bottom:20px;">请输入账号邮箱，我们将发送验证码到该邮箱</div>
+      <div class="login-form-box">
+        <div class="login-field">
+          <label class="login-field-label"><span class="req">*</span>邮箱</label>
+          <input class="login-input" id="forgotEmail" placeholder="请输入邮箱" oninput="clearLoginError('forgotEmail')">
+          <div class="login-field-err" id="forgotEmailErr">请输入邮箱</div>
+        </div>
+        <button class="login-submit" onclick="forgotNextFromEmail()">下一步</button>
+        <button class="login-forgot" style="margin-top:12px" onclick="backToLoginFromForgot()">返回登录</button>
+      </div>
+    </div>
+
+    <!-- Step 1：输入邮箱验证码 -->
+    <div id="forgotStep1" style="display:none;">
+      <div class="login-welcome" style="font-size:20px;">输入验证码</div>
+      <div style="font-size:13px;color:#909399;margin-top:4px;margin-bottom:20px;">验证码已发送至 <span id="forgotEmailDisplay" style="color:#303133;font-weight:500;"></span></div>
+      <div class="login-form-box">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input class="login-input otp-input" maxlength="1" oninput="forgotCodeInput(this,0)" onkeydown="forgotCodeBackspace(event,0)">
+          <input class="login-input otp-input" maxlength="1" oninput="forgotCodeInput(this,1)" onkeydown="forgotCodeBackspace(event,1)">
+          <input class="login-input otp-input" maxlength="1" oninput="forgotCodeInput(this,2)" onkeydown="forgotCodeBackspace(event,2)">
+          <input class="login-input otp-input" maxlength="1" oninput="forgotCodeInput(this,3)" onkeydown="forgotCodeBackspace(event,3)">
+          <input class="login-input otp-input" maxlength="1" oninput="forgotCodeInput(this,4)" onkeydown="forgotCodeBackspace(event,4)">
+          <input class="login-input otp-input" maxlength="1" oninput="forgotCodeInput(this,5)" onkeydown="forgotCodeBackspace(event,5)">
+        </div>
+        <div class="login-field-err" id="forgotCodeErr" style="margin-bottom:8px;">验证码错误，请重新输入</div>
+        <button class="login-submit" id="forgotResendBtn" onclick="forgotResendCode()">60s</button>
+        <button class="login-forgot" style="margin-top:12px" onclick="backToLoginFromForgot()">返回登录</button>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:#C0C4CC;text-align:center;">
+        原型演示：<a href="javascript:void(0)" style="color:#409EFF" onclick="forgotSimulateCodeError()">验证码错误</a>
+        ·
+        <a href="javascript:void(0)" style="color:#409EFF" onclick="forgotSimulateCodeExpired()">验证码已过期</a>
+      </div>
+    </div>
+
+    <!-- Step 2：设置新密码 -->
+    <div id="forgotStep2" style="display:none;">
+      <div class="login-welcome" style="font-size:20px;">设置新密码</div>
+      <div style="font-size:13px;color:#909399;margin-top:4px;margin-bottom:20px;">新密码需包含大小写字母和数字，长度8-32位</div>
+      <div class="login-form-box">
+        <div class="login-field">
+          <label class="login-field-label"><span class="req">*</span>新密码</label>
+          <div class="login-input-wrap">
+            <input class="login-input" type="password" id="forgotPassword" placeholder="请输入新密码" oninput="clearLoginError('forgotPassword')">
+            <span class="login-eye" onclick="toggleActivationPwd('forgotPassword','forgotPwdEyeIcon')"><i data-lucide="eye-off" id="forgotPwdEyeIcon" style="width:15px;height:15px"></i></span>
+          </div>
+          <div class="login-field-err" id="forgotPasswordErr">密码需为 8-32 位，包含大小写字母和数字</div>
+        </div>
+        <div class="login-field" style="margin-bottom:6px">
+          <label class="login-field-label"><span class="req">*</span>确认新密码</label>
+          <div class="login-input-wrap">
+            <input class="login-input" type="password" id="forgotPasswordConfirm" placeholder="请再次输入新密码" oninput="clearLoginError('forgotPasswordConfirm')">
+            <span class="login-eye" onclick="toggleActivationPwd('forgotPasswordConfirm','forgotPwdConfirmEyeIcon')"><i data-lucide="eye-off" id="forgotPwdConfirmEyeIcon" style="width:15px;height:15px"></i></span>
+          </div>
+          <div class="login-field-err" id="forgotPasswordConfirmErr">两次输入的密码不一致</div>
+        </div>
+        <button class="login-submit" onclick="submitForgotPassword()">确认重置</button>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:#C0C4CC;text-align:center;">
+        原型演示：<a href="javascript:void(0)" style="color:#409EFF" onclick="forgotSimulateSamePassword()">新密码与原密码相同</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     安全验证（人机图形校验，对齐生产环境商户后台 GeeTest 滑块验证；
+     登录 / 忘记密码-发送验证码 提交前均需先通过）
+══════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="captchaModal" onclick="if(event.target===this)closeCaptchaModal()">
+  <div class="modal" style="width:340px;">
+    <div class="modal-header">
+      <span class="modal-title">安全验证</span>
+      <span class="modal-close" onclick="closeCaptchaModal()">
+        <i data-lucide="x" style="width:18px;height:18px;"></i>
+      </span>
+    </div>
+    <div class="modal-body" style="display:block;padding:20px 24px 24px;">
+      <div style="font-size:13px;color:#606266;margin-bottom:14px;">请按住滑块，拖动到最右侧完成验证</div>
+      <div class="captcha-track" id="captchaTrack">
+        <div class="captcha-track-fill" id="captchaTrackFill"></div>
+        <div class="captcha-track-text" id="captchaTrackText">向右拖动滑块</div>
+        <div class="captcha-handle" id="captchaHandle" onmousedown="captchaDragStart(event)">
+          <i data-lucide="chevrons-right" style="width:16px;height:16px;"></i>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <span class="login-field-err" id="captchaErr" style="display:none;margin-top:0;">验证码错误</span>
+        <span style="flex:1;"></span>
+        <span class="action-icon" onclick="captchaRefresh()" title="刷新验证"><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><i data-lucide="check-circle" class="toast-icon-success" id="toastIconEl" style="width:16px;height:16px"></i><span id="toastMsg">操作成功</span></div>
+
+<script>
+/* =========================================================================
+ * 导航 / 弹窗 / Toast 通用逻辑（与 Merchant Portal 一致）
+ * ========================================================================= */
+function openModal(id){ document.getElementById(id).classList.add('show'); }
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.modal-overlay').forEach(function(o){
+  o.addEventListener('click', function(e){ if (e.target === o) o.classList.remove('show'); });
+});
+var toastTimer = null;
+function showToast(msg, type) {
+  type = type || 'success';
+  var t = document.getElementById('toast');
+  var ico = document.getElementById('toastIconEl');
+  ico.setAttribute('data-lucide', type === 'error' ? 'x-circle' : 'check-circle');
+  ico.className = (type === 'error' ? 'toast-icon-error' : 'toast-icon-success');
+  ico.style.width = '16px'; ico.style.height = '16px';
+  document.getElementById('toastMsg').textContent = msg;
+  renderIcons();
+  t.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 3200);
+}
+function copyText(text) {
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(function(){ showToast('已复制到剪贴板'); });
+}
+function renderIcons(){ if (window.lucide) lucide.createIcons(); }
+
+/* =========================================================================
+ * i18n（对齐生产环境 paypaz-admin-web 的 locales/lang/{zh-CN,en-US}，
+ * 覆盖登录页 + 顶部账户/语言下拉 + 侧边导航等界面框架文案；
+ * 业务 mock 数据（订单、收款账户等表格内容）本期不做双语，保持中文。
+ * ========================================================================= */
+var LOCALE_LIST = [
+  { code:'zh_CN', text:'简体中文' },
+  { code:'en_US', text:'English' },
+];
+var CHROME_I18N = {
+  zh_CN: {
+    PayPazWelcome:'欢迎来到PayPaz', emialOrAccountLabel:'邮箱/账号', passwordLabel:'密码',
+    forgotPassword:'忘记密码?', loginBtn:'登录',
+    emailPlaceholder:'请输入邮箱或者账号', passwordPlaceholder:'请输入密码',
+    emailErr:'请输入邮箱/账号', passwordErr:'请输入密码',
+    verifiedTag:'已认证', accountLabel:'个人中心', logoutLabel:'退出登录',
+    navOverview:'首页', navWallet:'资产管理', navBalance:'账户资金', navLedger:'资金明细', navFrozen:'冻结明细',
+    navAccounts:'收款卡管理', navRates:'汇率配置', navOrders:'订单处理', navFlow:'订单记录',
+    navSettings:'系统设置', navMember:'用户与权限',
+  },
+  en_US: {
+    PayPazWelcome:'Welcome to PayPaz', emialOrAccountLabel:'E-mail/Account', passwordLabel:'Password',
+    forgotPassword:'Forgot password?', loginBtn:'Login',
+    emailPlaceholder:'Please enter your email or account', passwordPlaceholder:'Please enter your password',
+    emailErr:'Please enter your email/account', passwordErr:'Please enter your password',
+    verifiedTag:'Verified', accountLabel:'Account', logoutLabel:'Logout',
+    navOverview:'Home', navWallet:'Asset Management', navBalance:'Account Funds', navLedger:'Fund Statement', navFrozen:'Frozen Statement',
+    navAccounts:'Collection Cards', navRates:'Exchange Rate', navOrders:'Order Processing', navFlow:'Order Records',
+    navSettings:'Settings', navMember:'Users & Permissions',
+  },
+};
+var curLocale = 'zh_CN';
+
+function renderLocaleList(containerId) {
+  var wrap = document.getElementById(containerId);
+  wrap.innerHTML = '';
+  LOCALE_LIST.forEach(function(l){
+    var div = document.createElement('div');
+    div.className = 'locale-item' + (l.code === curLocale ? ' active' : '');
+    div.innerHTML = '<span>'+l.text+'</span><i data-lucide="check-circle"></i>';
+    div.onclick = function(){ changeLocale(l.code); };
+    wrap.appendChild(div);
+  });
+  renderIcons();
+}
+function changeLocale(code) {
+  curLocale = code;
+  closeAllDropdowns();
+  applyChromeLang();
+}
+function applyChromeLang() {
+  var t = CHROME_I18N[curLocale];
+  Object.keys(t).forEach(function(k){
+    var el = document.getElementById('t-' + k);
+    if (el) el.textContent = t[k];
+  });
+  document.getElementById('loginEmail').placeholder = t.emailPlaceholder;
+  document.getElementById('loginPassword').placeholder = t.passwordPlaceholder;
+  document.getElementById('loginEmailErr').textContent = t.emailErr;
+  document.getElementById('loginPasswordErr').textContent = t.passwordErr;
+  renderLocaleList('loginLocaleList');
+}
+
+/* =========================================================================
+ * Header dropdowns（UserDropdown / AppLocalePicker，点击外部自动关闭）
+ * ========================================================================= */
+function toggleDropdown(id, e) {
+  e.stopPropagation();
+  var el = document.getElementById(id);
+  var isOpen = el.classList.contains('show');
+  closeAllDropdowns();
+  if (!isOpen) el.classList.add('show');
+}
+function closeAllDropdowns() {
+  document.querySelectorAll('.header-dropdown').forEach(function(d){ d.classList.remove('show'); });
+}
+document.addEventListener('click', closeAllDropdowns);
+
+/* =========================================================================
+ * 登录 / 退出登录
+ * ========================================================================= */
+function clearLoginError(fieldId) {
+  document.getElementById(fieldId).classList.remove('is-error');
+  document.getElementById(fieldId + 'Err').style.display = 'none';
+}
+function toggleLoginPwd() {
+  var input = document.getElementById('loginPassword');
+  var icon = document.getElementById('loginEyeIcon');
+  var toText = input.type === 'password';
+  input.type = toText ? 'text' : 'password';
+  icon.setAttribute('data-lucide', toText ? 'eye' : 'eye-off');
+  renderIcons();
+}
+function handleLogin() {
+  var email = document.getElementById('loginEmail');
+  var pwd = document.getElementById('loginPassword');
+  var ok = true;
+  document.getElementById('loginNotice').style.display = 'none';
+  document.getElementById('t-loginBtn').disabled = false;
+  if (!email.value.trim()) { email.classList.add('is-error'); document.getElementById('loginEmailErr').style.display = 'block'; ok = false; }
+  if (!pwd.value.trim()) { pwd.classList.add('is-error'); document.getElementById('loginPasswordErr').style.display = 'block'; ok = false; }
+  if (!ok) return;
+  // 提交前需先通过安全验证（对齐生产环境商户后台 GeeTest 图形校验），通过后才真正发起登录
+  openCaptchaModal(function () {
+    var addr = email.value.trim().toLowerCase();
+    if (addr === 'wrongpwd@test.com')  { simulateLoginState('wrongpwd');  return; }
+    if (addr === 'locked@test.com')    { simulateLoginState('locked');    return; }
+    if (addr === 'inactive@test.com')  { simulateLoginState('inactive');  return; }
+    if (addr === 'disabled@test.com')  { simulateLoginState('disabled'); return; }
+    doLoginSuccess();
+  });
+}
+function doLoginSuccess() {
+  showToast(curLocale === 'zh_CN' ? '登录成功' : 'Login successful');
+  setTimeout(function(){ location.href = 'index.html'; }, 600);
+}
+function demoLoginAs(email) {
+  document.getElementById('loginEmail').value = email;
+  document.getElementById('loginPassword').value = 'Demo1234';
+  handleLogin();
+}
+/* ── 登录页各种状态（原型演示入口：登录页底部"模拟登录状态"）──
+ * 文案对齐生产环境 broker-api（对应商户后台/CPP 登录）messages_zh_CN.properties：
+ * user.password.not.match / user.password.retry.limit.exceed / user.blocked；
+ * “账号未激活”生产端无独立登录文案（未激活账号本身无密码可比对），此处按产品设计补充。 */
+function simulateLoginState(state) {
+  clearLoginError('loginEmail');
+  clearLoginError('loginPassword');
+  var notice = document.getElementById('loginNotice');
+  var submitBtn = document.getElementById('t-loginBtn');
+  submitBtn.disabled = false;
+  if (state === 'wrongpwd') {
+    var pwd = document.getElementById('loginPassword');
+    pwd.classList.add('is-error');
+    var err = document.getElementById('loginPasswordErr');
+    err.textContent = '账号或密码错误';
+    err.style.display = 'block';
+    notice.style.display = 'none';
+  } else if (state === 'locked') {
+    notice.className = 'alert-box alert-danger';
+    notice.innerHTML = '<i data-lucide="lock" class="alert-icon" style="width:15px;height:15px"></i><span>您尝试登录的失败次数过多，请等待120分钟后再试</span>';
+    notice.style.display = 'flex';
+    submitBtn.disabled = true;
+  } else if (state === 'inactive') {
+    notice.className = 'alert-box alert-warning';
+    notice.innerHTML = '<i data-lucide="mail" class="alert-icon" style="width:15px;height:15px"></i><span>账号尚未激活，请前往邮箱查收邀请邮件完成激活。</span>';
+    notice.style.display = 'flex';
+  } else if (state === 'disabled') {
+    notice.className = 'alert-box alert-danger';
+    notice.innerHTML = '<i data-lucide="ban" class="alert-icon" style="width:15px;height:15px"></i><span>对不起，您的账号已禁用，请联系管理员</span>';
+    notice.style.display = 'flex';
+  }
+  renderIcons();
+}
+
+/* 新密码规则（激活页、忘记密码共用）：同时包含大写字母、小写字母、数字，长度 8-32 位 */
+var PWD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,32}$/;
+var PWD_RULE_MSG = '密码需为 8-32 位，包含大小写字母和数字';
+
+/* ── 激活页（原型演示入口：登录页底部"查看激活页/查看链接已过期"）
+ * kind：'owner' 主账号（Paypaz 邀请）/ 'member' 子账号（主账号邀请），两者共用本页，展示信息不同 ── */
+var ACT_KIND = {
+  owner:  { label:'收款服务商名称', merchant:'sunrise-settle', user:null, email:'ops@sunrise-settle.com',
+            subtitle:'请核对以下信息并设置登录密码，完成后将自动登录',
+            expired:'链接已失效，请联系 Paypaz 管理员重新发送邀请' },
+  member: { label:'所属收款服务商', merchant:'汇泽金融', user:'吴倩', email:'wu.qian@huize-fin.com',
+            subtitle:'汇泽金融 邀请您加入 PayPaz 收款商户后台，请核对以下信息并设置登录密码，完成后将自动登录',
+            expired:'链接已失效，请联系管理员。' }
+};
+function showActivationScreen(state, kind) {
+  var k = ACT_KIND[kind || 'owner'];
+  document.getElementById('actMerchantLabel').textContent = k.label;
+  document.getElementById('actMerchantName').value = k.merchant;
+  document.getElementById('actUserNameField').style.display = k.user ? '' : 'none';
+  document.getElementById('actUserName').value = k.user || '';
+  document.getElementById('actMerchantEmail').value = k.email;
+  document.getElementById('actSubtitle').textContent = k.subtitle;
+  document.getElementById('actExpiredTip').textContent = k.expired;
+  document.getElementById('loginScreen').classList.remove('active');
+  document.getElementById('activationScreen').classList.add('active');
+  var formBlock = document.getElementById('activationFormBlock');
+  var expiredBlock = document.getElementById('activationExpiredBlock');
+  if (state === 'expired') {
+    formBlock.style.display = 'none';
+    expiredBlock.style.display = 'block';
+  } else {
+    formBlock.style.display = 'block';
+    expiredBlock.style.display = 'none';
+    document.getElementById('actPassword').value = '';
+    document.getElementById('actPasswordConfirm').value = '';
+    clearLoginError('actPassword');
+    clearLoginError('actPasswordConfirm');
+  }
+  renderIcons();
+}
+function toggleActivationPwd(inputId, iconId) {
+  var input = document.getElementById(inputId);
+  var icon = document.getElementById(iconId);
+  var toText = input.type === 'password';
+  input.type = toText ? 'text' : 'password';
+  icon.setAttribute('data-lucide', toText ? 'eye' : 'eye-off');
+  renderIcons();
+}
+function submitActivation() {
+  var pwd = document.getElementById('actPassword');
+  var pwdConfirm = document.getElementById('actPasswordConfirm');
+  var ok = true;
+  // 密码规则对齐 paypaz-admin-web validatePassword：大小写字母+数字，长度8-32位
+  if (!PWD_RULE.test(pwd.value.trim())) {
+    pwd.classList.add('is-error');
+    document.getElementById('actPasswordErr').textContent = PWD_RULE_MSG;
+    document.getElementById('actPasswordErr').style.display = 'block';
+    ok = false;
+  }
+  if (!pwdConfirm.value.trim() || pwdConfirm.value.trim() !== pwd.value.trim()) {
+    pwdConfirm.classList.add('is-error');
+    document.getElementById('actPasswordConfirmErr').style.display = 'block';
+    ok = false;
+  }
+  if (!ok) return;
+  showToast('账户激活成功，已为您自动登录');
+  setTimeout(function(){ location.href = 'index.html'; }, 600);
+}
+
+/* ── 忘记密码（邮箱 → 验证码 → 设置新密码，对齐生产环境
+ * paypaz-admin-web/src/views/System/Forget 三步流程）── */
+var forgotCountdownTimer = null;
+
+function showForgotScreen() {
+  document.getElementById('loginScreen').classList.remove('active');
+  document.getElementById('forgotScreen').classList.add('active');
+  document.getElementById('forgotEmail').value = '';
+  document.getElementById('forgotPassword').value = '';
+  document.getElementById('forgotPasswordConfirm').value = '';
+  clearLoginError('forgotEmail');
+  clearLoginError('forgotPassword');
+  clearLoginError('forgotPasswordConfirm');
+  document.querySelectorAll('#forgotStep1 .otp-input').forEach(function (i) { i.value = ''; });
+  forgotGoStep(0);
+}
+function backToLoginFromForgot() {
+  clearInterval(forgotCountdownTimer);
+  document.getElementById('forgotScreen').classList.remove('active');
+  document.getElementById('loginScreen').classList.add('active');
+}
+function forgotGoStep(step) {
+  document.getElementById('forgotStep0').style.display = step === 0 ? 'block' : 'none';
+  document.getElementById('forgotStep1').style.display = step === 1 ? 'block' : 'none';
+  document.getElementById('forgotStep2').style.display = step === 2 ? 'block' : 'none';
+}
+function forgotNextFromEmail() {
+  var email = document.getElementById('forgotEmail');
+  if (!email.value.trim()) {
+    email.classList.add('is-error');
+    document.getElementById('forgotEmailErr').style.display = 'block';
+    return;
+  }
+  // 发送验证码前需先通过安全验证（对齐生产环境商户后台 GeeTest 图形校验）
+  openCaptchaModal(function () {
+    document.getElementById('forgotEmailDisplay').textContent = email.value.trim();
+    forgotGoStep(1);
+    forgotStartCountdown();
+    showToast('验证码已发送至 ' + email.value.trim());
+  });
+}
+function forgotStartCountdown() {
+  var btn = document.getElementById('forgotResendBtn');
+  var count = 60;
+  btn.disabled = true;
+  btn.textContent = count + 's';
+  clearInterval(forgotCountdownTimer);
+  forgotCountdownTimer = setInterval(function () {
+    count--;
+    if (count <= 0) {
+      clearInterval(forgotCountdownTimer);
+      btn.disabled = false;
+      btn.textContent = '重新发送';
+    } else {
+      btn.textContent = count + 's';
+    }
+  }, 1000);
+}
+function forgotResendCode() {
+  if (document.getElementById('forgotResendBtn').disabled) return;
+  showToast('验证码已重新发送');
+  forgotStartCountdown();
+}
+function forgotCodeBackspace(e, idx) {
+  if (e.key === 'Backspace' && !e.target.value && idx > 0) {
+    var inputs = document.querySelectorAll('#forgotStep1 .otp-input');
+    inputs[idx - 1].focus();
+  }
+}
+function forgotCodeInput(el, idx) {
+  var inputs = document.querySelectorAll('#forgotStep1 .otp-input');
+  document.getElementById('forgotCodeErr').style.display = 'none';
+  if (el.value && idx < 5) { inputs[idx + 1].focus(); }
+  var allFilled = Array.prototype.every.call(inputs, function (i) { return i.value.trim().length === 1; });
+  if (allFilled) {
+    clearInterval(forgotCountdownTimer);
+    setTimeout(function () { forgotGoStep(2); }, 200);
+  }
+}
+// 原型演示用的"当前密码"，用于模拟 user.password.same（新密码不能与当前密码相同）
+var FORGOT_DEMO_CURRENT_PWD = 'Demo1234';
+
+function submitForgotPassword() {
+  var pwd = document.getElementById('forgotPassword');
+  var pwdConfirm = document.getElementById('forgotPasswordConfirm');
+  var pwdErr = document.getElementById('forgotPasswordErr');
+  var ok = true;
+  // 密码规则对齐 paypaz-admin-web validatePassword：大小写字母+数字，长度8-32位
+  if (!PWD_RULE.test(pwd.value.trim())) {
+    pwd.classList.add('is-error');
+    pwdErr.textContent = PWD_RULE_MSG;
+    pwdErr.style.display = 'block';
+    ok = false;
+  } else if (pwd.value.trim() === FORGOT_DEMO_CURRENT_PWD) {
+    // 对齐生产环境 user.password.same
+    pwd.classList.add('is-error');
+    pwdErr.textContent = '新密码不能与当前密码相同';
+    pwdErr.style.display = 'block';
+    ok = false;
+  }
+  if (!pwdConfirm.value.trim() || pwdConfirm.value.trim() !== pwd.value.trim()) {
+    pwdConfirm.classList.add('is-error');
+    document.getElementById('forgotPasswordConfirmErr').style.display = 'block';
+    ok = false;
+  }
+  if (!ok) return;
+  backToLoginFromForgot();
+  showToast('密码重置成功，请使用新密码登录');
+}
+function forgotSimulateSamePassword() {
+  document.getElementById('forgotPassword').value = FORGOT_DEMO_CURRENT_PWD;
+  document.getElementById('forgotPasswordConfirm').value = FORGOT_DEMO_CURRENT_PWD;
+  submitForgotPassword();
+}
+function forgotSimulateCodeError() {
+  var err = document.getElementById('forgotCodeErr');
+  err.textContent = '验证码错误，您还能尝试 2 次';
+  err.style.display = 'block';
+}
+function forgotSimulateCodeExpired() {
+  var err = document.getElementById('forgotCodeErr');
+  err.textContent = '验证码过期，请重新发送';
+  err.style.display = 'block';
+  document.querySelectorAll('#forgotStep1 .otp-input').forEach(function (i) { i.value = ''; });
+  clearInterval(forgotCountdownTimer);
+  document.getElementById('forgotResendBtn').disabled = false;
+  document.getElementById('forgotResendBtn').textContent = '重新发送';
+}
+
+/* ── 安全验证（人机图形校验，对齐生产环境商户后台 GeeTest 滑块验证）──
+ * 文案对齐 broker-api messages_zh_CN.properties：user.jcaptcha.error / user.jcaptcha.expire */
+var captchaDragging = false, captchaStartX = 0, captchaTrackWidth = 0, captchaOnSuccess = null;
+
+function openCaptchaModal(onSuccess) {
+  captchaOnSuccess = onSuccess;
+  captchaResetSlider();
+  document.getElementById('captchaModal').classList.add('show');
+  renderIcons();
+}
+function closeCaptchaModal() {
+  document.getElementById('captchaModal').classList.remove('show');
+}
+function captchaResetSlider() {
+  document.getElementById('captchaHandle').style.left = '0px';
+  document.getElementById('captchaHandle').classList.remove('success');
+  document.getElementById('captchaTrackFill').style.width = '0px';
+  document.getElementById('captchaTrackText').textContent = '向右拖动滑块';
+  document.getElementById('captchaErr').style.display = 'none';
+}
+function captchaRefresh() {
+  captchaResetSlider();
+  showToast('验证码已失效', 'error');
+}
+function captchaDragStart(e) {
+  captchaDragging = true;
+  captchaStartX = e.clientX;
+  captchaTrackWidth = document.getElementById('captchaTrack').offsetWidth - 40;
+  document.getElementById('captchaErr').style.display = 'none';
+  document.addEventListener('mousemove', captchaDragMove);
+  document.addEventListener('mouseup', captchaDragEnd);
+}
+function captchaDragMove(e) {
+  if (!captchaDragging) return;
+  var delta = e.clientX - captchaStartX;
+  var pos = Math.max(0, Math.min(delta, captchaTrackWidth));
+  document.getElementById('captchaHandle').style.left = pos + 'px';
+  document.getElementById('captchaTrackFill').style.width = (pos + 40) + 'px';
+}
+function captchaDragEnd() {
+  if (!captchaDragging) return;
+  captchaDragging = false;
+  document.removeEventListener('mousemove', captchaDragMove);
+  document.removeEventListener('mouseup', captchaDragEnd);
+  var pos = parseInt(document.getElementById('captchaHandle').style.left, 10) || 0;
+  if (captchaTrackWidth > 0 && pos >= captchaTrackWidth - 4) {
+    document.getElementById('captchaHandle').style.left = captchaTrackWidth + 'px';
+    document.getElementById('captchaTrackFill').style.width = '100%';
+    document.getElementById('captchaHandle').classList.add('success');
+    document.getElementById('captchaTrackText').textContent = '验证通过';
+    var onSuccess = captchaOnSuccess;
+    setTimeout(function () {
+      closeCaptchaModal();
+      if (onSuccess) onSuccess();
+    }, 400);
+  } else {
+    // 对齐生产环境 user.jcaptcha.error
+    document.getElementById('captchaErr').style.display = 'inline';
+    document.getElementById('captchaHandle').style.left = '0px';
+    document.getElementById('captchaTrackFill').style.width = '0px';
+  }
+}
+
+/* =========================================================================
+ * Init
+ * ========================================================================= */
+applyChromeLang();
+// 直接打开激活页 / 链接过期页：login.html#activate、login.html#expired
+if (location.hash === '#activate') showActivationScreen('form');
+if (location.hash === '#expired') showActivationScreen('expired');
+renderIcons();
+</script>
+</body>
+</html>
