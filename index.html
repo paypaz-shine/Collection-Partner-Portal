@@ -13,7 +13,8 @@
  * PayPaz 收款商户后台原型 · 后台主应用（直接打开，无需登录）；登录 / 激活 / 忘记密码见 login.html
  * 布局 / 组件与 Dev/Merchant Portal/index.html 保持一致（浅色侧边栏 + 深色顶栏，
  * filter-card / table-card / badge / modal / toast 等类名直接复用）。
- * 本期范围：仅法币代收（收款服务商充值 USDT 代币余额 → 下单锁定汇率冻结 → 三道核验确认收款即扣划结算）。
+ * 已扩展：法币代付 4.4 · 代付汇率配置、代付通道、代付订单（列表 / 详情 / 导出、接单、拒单、付款、付款异常、补充材料、补报付款）、代付入账、代付权限。
+ * 既有代收范围：法币代收（收款服务商充值 USDT 代币余额 → 下单锁定汇率冻结 → 三道核验确认收款即扣划结算）。
  * 不做 Off Ramp / 法币直存 / 法币直取 / 放款卡 —— 这些是同一个业务方演示原型里的其它业务线，
  * 这期不在范围内。
  * ========================================================================= */
@@ -365,6 +366,20 @@ td { height:52px; padding:0 12px; font-size:13px; color:#303133; white-space:now
 .od-section { display:flex; flex-direction:column; gap:8px; }
 .od-section-title { font-size:13px; font-weight:600; color:#303133; }
 .od-section-sub { font-size:12px; font-weight:400; color:#909399; margin-left:8px; }
+/* 代付订单（4.4） */
+.po-textarea { width:100%; height:80px; padding:10px; resize:vertical; font-family:'Noto Sans SC',sans-serif; }
+.po-check { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#606266; cursor:pointer; }
+.po-radio-group { display:flex; gap:24px; }
+.po-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px 16px; }
+.po-file-list { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+.po-file-list:empty { display:none; }
+.po-rec { border:1px solid #EBEEF5; border-radius:4px; padding:2px 12px 10px; display:flex; flex-direction:column; gap:6px; }
+.po-rec .drawer-meta-row { padding:7px 0; }
+.po-sub-title { font-size:12px; color:#909399; }
+.po-log-head { display:flex; align-items:center; gap:8px; font-size:12px; color:#909399; }
+.po-total { display:flex; justify-content:space-between; font-size:13px; color:#606266; padding:2px 2px 0; }
+.po-demo { border:1px dashed #DCDFE6; border-radius:4px; padding:10px 12px; display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.po-demo-label { font-size:12px; color:#909399; width:100%; }
 .od-tl-op { font-size:12px; color:#909399; margin-top:2px; }
 .od-text { font-size:13px; color:#606266; line-height:1.7; background:#F5F7FA; border-radius:4px; padding:10px 14px; }
 .attach-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid #EBEEF5; border-radius:4px; background:#fff; }
@@ -487,6 +502,15 @@ svg.lucide { stroke-width:1.5; display:block; }
 .textarea-count { font-size:12px; color:#909399; text-align:right; margin-top:4px; line-height:1; }
 .od-cancel-note { font-size:12px; color:#909399; line-height:1.7; margin-top:8px; }
 .page-title-hint { font-size:12px; color:#909399; font-weight:400; margin-left:8px; }
+/* 通用说明气泡：info 图标悬停 / 聚焦 / 点击显示；气泡挂在 body 上并用 fixed 定位，不被父容器 overflow 裁切 */
+.stat-label-tip { display:flex; align-items:center; gap:4px; }
+.info-tip { display:inline-flex; align-items:center; color:#C0C4CC; cursor:pointer; border-radius:50%; }
+.info-tip:hover, .info-tip:focus-visible, .info-tip.on { color:#909399; outline:none; }
+.info-tip svg { width:13px; height:13px; }
+.tip-pop { position:fixed; z-index:3000; display:none; max-width:240px; padding:8px 10px; background:#303133; color:#fff; font-size:12px; line-height:1.6; border-radius:4px; box-shadow:0 2px 12px rgba(0,0,0,.15); white-space:normal; word-break:break-word; pointer-events:none; }
+.tip-pop.show { display:block; }
+.tip-pop::after { content:''; position:absolute; left:var(--ax, 50%); top:100%; transform:translateX(-50%); border:5px solid transparent; border-top-color:#303133; }
+.tip-pop.below::after { top:auto; bottom:100%; border-top-color:transparent; border-bottom-color:#303133; }
 </style>
 </head>
 <body>
@@ -538,16 +562,6 @@ svg.lucide { stroke-width:1.5; display:block; }
       <span class="nav-label" id="t-navOverview">首页</span>
     </div>
 
-    <div class="nav-item" data-page="pageAccounts" onclick="switchPage('pageAccounts',this)">
-      <i data-lucide="credit-card" class="nav-icon"></i>
-      <span class="nav-label" id="t-navAccounts">收款卡管理</span>
-    </div>
-
-    <div class="nav-item" data-page="pageOrders" onclick="switchPage('pageOrders',this)">
-      <i data-lucide="list-checks" class="nav-icon"></i>
-      <span class="nav-label" id="t-navOrders">收款订单</span>
-    </div>
-
     <div class="nav-item nav-parent open" onclick="toggleNav('navSubWallet',this)">
       <i data-lucide="wallet" class="nav-icon"></i>
       <span class="nav-label" id="t-navWallet">资产管理</span>
@@ -557,7 +571,28 @@ svg.lucide { stroke-width:1.5; display:block; }
       <div class="nav-sub-item" data-navkey="balance" onclick="switchSubPage('pageBalance','balance')"><span id="t-navBalance">账户资金</span></div>
       <div class="nav-sub-item" data-navkey="ledger" onclick="switchSubPage('pageLedger','ledger')"><span id="t-navLedger">资金明细</span></div>
       <div class="nav-sub-item" data-navkey="frozen" onclick="switchSubPage('pageFrozen','frozen')"><span id="t-navFrozen">冻结明细</span></div>
-      <div class="nav-sub-item" data-navkey="rates" onclick="switchSubPage('pageRates','rates')"><span id="t-navRates">汇率配置</span></div>
+    </div>
+
+    <div class="nav-item nav-parent open" id="navCollect" onclick="toggleNav('navSubCollect',this)">
+      <i data-lucide="arrow-down-circle" class="nav-icon"></i>
+      <span class="nav-label" id="t-navCollect">代收</span>
+      <i data-lucide="chevron-right" class="nav-chevron"></i>
+    </div>
+    <div class="nav-sub open" id="navSubCollect">
+      <div class="nav-sub-item" data-navkey="orders" data-page="pageOrders" onclick="switchSubPage('pageOrders','orders')"><span id="t-navOrders">代收订单</span></div>
+      <div class="nav-sub-item" data-navkey="accounts" data-page="pageAccounts" onclick="switchSubPage('pageAccounts','accounts')"><span id="t-navAccounts">收款卡</span></div>
+      <div class="nav-sub-item" data-navkey="rates" data-page="pageRates" onclick="switchSubPage('pageRates','rates')"><span id="t-navRates">代收汇率</span></div>
+    </div>
+
+    <div class="nav-item nav-parent open" id="navPayout" onclick="toggleNav('navSubPayout',this)">
+      <i data-lucide="arrow-up-circle" class="nav-icon"></i>
+      <span class="nav-label" id="t-navPayout">代付</span>
+      <i data-lucide="chevron-right" class="nav-chevron"></i>
+    </div>
+    <div class="nav-sub open" id="navSubPayout">
+      <div class="nav-sub-item" data-navkey="payoutOrders" data-page="pagePayoutOrders" onclick="switchSubPage('pagePayoutOrders','payoutOrders')"><span id="t-navPayoutOrders">代付订单</span></div>
+      <div class="nav-sub-item" data-navkey="payoutChannels" data-page="pagePayoutChannels" onclick="switchSubPage('pagePayoutChannels','payoutChannels')"><span id="t-navPayoutChannels">代付通道</span></div>
+      <div class="nav-sub-item" data-navkey="payoutRates" data-page="pagePayoutRates" onclick="switchSubPage('pagePayoutRates','payoutRates')"><span id="t-navPayoutRates">代付汇率</span></div>
     </div>
 
     <div class="nav-item nav-parent" id="navSettings" onclick="toggleNav('navSubSettings',this)">
@@ -620,6 +655,8 @@ svg.lucide { stroke-width:1.5; display:block; }
           <div class="stat-item"><div class="stat-label">收款冻结</div><div class="stat-value" style="color:#F56C6C" id="ovFrozen">—</div></div>
           <div class="stat-sep"></div>
           <div class="stat-item"><div class="stat-label">提现冻结</div><div class="stat-value" style="color:#E6A23C" id="ovWdFrozen">—</div></div>
+          <div class="stat-sep" id="ovPoPendingSep"></div>
+          <div class="stat-item" id="ovPoPendingItem"><div class="stat-label stat-label-tip">代付待入账<span class="info-tip" tabindex="0" role="button" aria-label="说明" data-tip="进行中订单成功后入账的金额；裁定失败或拒单不入账" onpointerenter="if(event.pointerType==='mouse')showTip(this)" onpointerleave="if(event.pointerType==='mouse')hideTip()" onfocus="if(this.matches(':focus-visible'))showTip(this)" onblur="hideTip()" onclick="toggleTip(this, event)"><i data-lucide="info"></i></span></div><div class="stat-value" style="color:#909399" id="ovPoPending">—</div><div class="stat-sub">不计入总余额</div></div>
           <div class="stat-spacer"></div>
           <div class="stat-actions">
             <button class="btn btn-primary" onclick="openDepositModal()">充值</button>
@@ -629,7 +666,7 @@ svg.lucide { stroke-width:1.5; display:block; }
       </div>
 
       <div>
-        <div class="section-header"><span class="section-label">订单</span></div>
+        <div class="section-header"><span class="section-label">代收订单</span></div>
         <div class="progress-cards">
           <div class="progress-card progress-card-info" onclick="goOrders('pay')">
             <div class="progress-card-title">待付款</div>
@@ -646,13 +683,31 @@ svg.lucide { stroke-width:1.5; display:block; }
         </div>
       </div>
 
+      <div id="ovPayoutSection">
+        <div class="section-header"><span class="section-label">代付订单</span></div>
+        <div class="progress-cards">
+          <div class="progress-card progress-card-info" onclick="goPayoutOrders('pending_accept')">
+            <div class="progress-card-title">待接单</div>
+            <div class="progress-card-count" id="ovPoAccept">0<span>笔</span></div>
+          </div>
+          <div class="progress-card progress-card-warning" onclick="goPayoutOrders('pending_payment')">
+            <div class="progress-card-title">待付款</div>
+            <div class="progress-card-count" id="ovPoPay">0<span>笔</span></div>
+          </div>
+          <div class="progress-card progress-card-danger" onclick="goPayoutOrders('appealed')">
+            <div class="progress-card-title">申诉中</div>
+            <div class="progress-card-count" id="ovPoAppeal">0<span>笔</span></div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
   <!-- ══ 收款卡管理 ════════════════════════════════════════ -->
   <div class="page" id="pageAccounts">
     <div class="content-area">
-      <h2 class="page-title">收款卡管理</h2>
+      <h2 class="page-title">收款卡</h2>
       <div class="filter-card">
         <div class="filter-grid">
           <div class="filter-item"><span class="filter-label-el">卡号</span><div class="filter-control"><input class="field-input" id="cardNoFilter" placeholder="请输入卡号"></div></div>
@@ -685,7 +740,7 @@ svg.lucide { stroke-width:1.5; display:block; }
   <!-- ══ 收款订单 ══════════════════════════════════════════ -->
   <div class="page" id="pageOrders">
     <div class="content-area">
-      <h2 class="page-title">收款订单</h2>
+      <h2 class="page-title">代收订单</h2>
       <div class="filter-card">
         <div class="filter-grid">
           <div class="filter-item"><span class="filter-label-el">订单号</span><div class="filter-control"><input class="field-input" id="ordIdFilter" placeholder="请输入订单号"></div></div>
@@ -711,6 +766,28 @@ svg.lucide { stroke-width:1.5; display:block; }
     </div>
   </div>
 
+  <!-- ══ 代付订单（收款服务商视角） ═══════════════════════════════ -->
+  <div class="page" id="pagePayoutOrders">
+    <div class="content-area">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><h2 class="page-title">代付订单</h2></div>
+      <div class="filter-card">
+        <div class="filter-grid">
+          <div class="filter-item"><span class="filter-label-el">订单号</span><div class="filter-control"><input class="field-input" id="poIdFilter" placeholder="请输入订单号"></div></div>
+          <div class="filter-item"><span class="filter-label-el">收款人</span><div class="filter-control"><input class="field-input" id="poPayeeFilter" placeholder="请输入收款人"></div></div>
+          <div class="filter-item"><span class="filter-label-el">收款账号</span><div class="filter-control"><input class="field-input" id="poAccountFilter" placeholder="请输入收款账号"></div></div>
+          <div class="filter-item"><span class="filter-label-el">订单状态</span><div class="filter-control"><div class="select-wrap"><select class="field-select" id="poStatusFilter"><option value="">全部</option><option value="pending_accept">待接单</option><option value="pending_payment">待付款</option><option value="pending_confirmation">待确认到账</option><option value="appealed">申诉中</option><option value="completed">成功</option><option value="rejected">已拒绝</option><option value="failed">失败</option></select><i data-lucide="chevron-down" class="select-caret"></i></div></div></div>
+          <div class="filter-item"><span class="filter-label-el">创建时间</span><div class="filter-control"><div class="date-range"><input type="date" class="date-range-input" id="poCreFrom"><span class="date-range-sep">至</span><input type="date" class="date-range-input" id="poCreTo"></div></div></div>
+        </div>
+        <div class="filter-actions"><button class="btn btn-default" onclick="resetPayoutOrderFilter()">重置</button><button class="btn btn-primary" onclick="searchPayoutOrders()">查询</button></div>
+      </div>
+      <div class="table-card" style="flex:1">
+        <div class="summary-bar"><span class="count-value" id="poCount">0</span><span class="count-label">笔</span><span class="summary-spacer"></span><button class="btn btn-default" id="poExportBtn" onclick="exportPayoutOrders()"><i data-lucide="download" style="width:14px;height:14px"></i>导出</button></div>
+        <div class="table-wrap"><table style="min-width:1580px"><colgroup><col style="width:190px"><col style="width:130px"><col style="width:280px"><col style="width:150px"><col style="width:140px"><col style="width:130px"><col style="width:200px"><col style="width:165px"><col style="width:195px"></colgroup><thead><tr><th>订单号</th><th>订单金额</th><th>收款人 / 收款账户</th><th>代付汇率</th><th>入账金额</th><th>状态</th><th>当前截止时间</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="poTbody"></tbody></table></div>
+        <div class="pagination-bar" id="poPager"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ══ 资产管理 — 账户资金 ══════════════════════════════ -->
   <div class="page" id="pageBalance">
     <div class="content-area">
@@ -724,6 +801,8 @@ svg.lucide { stroke-width:1.5; display:block; }
           <div class="stat-item"><div class="stat-label">收款冻结</div><div class="stat-value" style="color:#F56C6C" id="balFrozen">—</div></div>
           <div class="stat-sep"></div>
           <div class="stat-item"><div class="stat-label">提现冻结</div><div class="stat-value" style="color:#E6A23C" id="balWdFrozen">—</div></div>
+          <div class="stat-sep" id="balPoPendingSep"></div>
+          <div class="stat-item" id="balPoPendingItem"><div class="stat-label stat-label-tip">代付待入账<span class="info-tip" tabindex="0" role="button" aria-label="说明" data-tip="进行中订单成功后入账的金额；裁定失败或拒单不入账" onpointerenter="if(event.pointerType==='mouse')showTip(this)" onpointerleave="if(event.pointerType==='mouse')hideTip()" onfocus="if(this.matches(':focus-visible'))showTip(this)" onblur="hideTip()" onclick="toggleTip(this, event)"><i data-lucide="info"></i></span></div><div class="stat-value" style="color:#909399" id="balPoPending">—</div><div class="stat-sub">不计入总余额</div></div>
           <div class="stat-spacer"></div>
           <div class="stat-actions">
             <button class="btn btn-primary" onclick="openDepositModal()">充值</button>
@@ -815,7 +894,7 @@ svg.lucide { stroke-width:1.5; display:block; }
   <!-- ══ 汇率配置 ══════════════════════════════════════════ -->
   <div class="page" id="pageRates">
     <div class="content-area">
-      <h2 class="page-title">汇率配置</h2>
+      <h2 class="page-title">代收汇率</h2>
       <div class="table-card" style="flex:none">
         <div class="table-wrap">
           <table>
@@ -845,6 +924,69 @@ svg.lucide { stroke-width:1.5; display:block; }
         </div>
         <div class="pagination-bar" id="rhPager"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ══ 代付汇率配置 ══════════════════════════════════════════ -->
+  <div class="page" id="pagePayoutRates">
+    <div class="content-area">
+      <h2 class="page-title">代付汇率</h2>
+      <div class="table-card" style="flex:none">
+        <div class="table-wrap">
+          <table>
+            <colgroup><col style="width:120px"><col style="width:220px"><col style="width:120px"><col style="width:190px"><col></colgroup>
+            <thead><tr><th>币对</th><th>代付汇率</th><th>状态</th><th>最近更新时间</th><th>操作</th></tr></thead>
+            <tbody id="payoutRateTbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div class="section-header"><span class="section-label">变更记录</span></div>
+        <div class="filter-card">
+          <div class="filter-grid">
+            <div class="filter-item"><span class="filter-label-el">操作人</span><div class="filter-control"><input class="field-input" id="prhOperatorFilter" placeholder="请输入操作人"></div></div>
+            <div class="filter-item"><span class="filter-label-el">变更时间</span><div class="filter-control"><div class="date-range"><input type="date" class="date-range-input" id="prhFrom"><span class="date-range-sep">至</span><input type="date" class="date-range-input" id="prhTo"></div></div></div>
+          </div>
+          <div class="filter-actions"><button class="btn btn-default" onclick="resetPayoutRateHistFilter()">重置</button><button class="btn btn-primary" onclick="searchPayoutRateHist()">查询</button></div>
+        </div>
+      </div>
+      <div class="table-card" style="flex:1">
+        <div class="summary-bar"><span class="count-value" id="prhCount">0</span><span class="count-label">条</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>变更时间</th><th>变更前</th><th>变更后</th><th>操作人</th></tr></thead>
+            <tbody id="payoutRateHistTbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="prhPager"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 代付通道管理 ══ -->
+  <div class="page" id="pagePayoutChannels">
+    <div class="content-area">
+      <h2 class="page-title">代付通道</h2>
+      <div class="filter-card">
+        <div class="filter-grid">
+          <div class="filter-item"><label class="filter-label-el" for="pcIdFilter">通道编号</label><div class="filter-control"><input class="field-input" id="pcIdFilter" placeholder="请输入通道编号"></div></div>
+          <div class="filter-item"><label class="filter-label-el" for="pcBankFilter">支持银行</label><div class="filter-control"><select class="field-select" id="pcBankFilter"><option value="">全部银行</option></select></div></div>
+          <div class="filter-item"><label class="filter-label-el" for="pcStatusFilter">状态</label><div class="filter-control"><select class="field-select" id="pcStatusFilter"><option value="">全部</option><option value="on">已启用</option><option value="off">已禁用</option></select></div></div>
+        </div>
+        <div class="filter-actions"><button class="btn btn-default" onclick="resetPayoutChannelFilter()">重置</button><button class="btn btn-primary" onclick="searchPayoutChannels()">查询</button></div>
+      </div>
+      <div class="table-card">
+        <div class="summary-bar"><span><span class="count-value" id="pcCount">0</span> <span class="count-label">条</span></span><span class="summary-spacer"></span><button class="btn btn-primary" id="pcAddBtn" onclick="openPayoutChannelForm()"><i data-lucide="plus" style="width:14px;height:14px"></i>新增代付通道</button></div>
+        <div class="table-wrap">
+          <table style="min-width:1420px">
+            <colgroup><col style="width:130px"><col style="width:65px"><col style="width:200px"><col style="width:150px"><col style="width:190px"><col style="width:190px"><col style="width:150px"><col style="width:185px"><col style="width:160px"></colgroup>
+            <thead><tr><th>通道编号</th><th>币种</th><th>支持银行</th><th>服务时段（UTC+8）</th><th>单笔金额（CNY）</th><th>时段额度（CNY）</th><th>状态 / 派单条件</th><th>最近更新时间</th><th>操作</th></tr></thead>
+            <tbody id="pcTbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="pcPager"></div>
+      </div>
+      <div class="field-hint" style="margin:0;flex-shrink:0">已用额度 = 本时段进行中订单 + 已成功订单的 CNY 金额；申诉、超时及部分退回不释放。每日额度独立统计，旧单释放归属原时段。</div>
     </div>
   </div>
 
@@ -1160,6 +1302,84 @@ svg.lucide { stroke-width:1.5; display:block; }
   </div>
 </div>
 
+<!-- ── 编辑代付汇率 Modal ── -->
+<div class="modal-overlay" id="payoutRateModal">
+  <div class="modal" style="width:480px">
+    <div class="modal-header"><span class="modal-title">编辑代付汇率</span><span class="modal-close" onclick="closeModal('payoutRateModal')"><i data-lucide="x"></i></span></div>
+    <div class="modal-body">
+      <div class="drawer-meta">
+        <div class="drawer-meta-row"><span class="drawer-meta-label">币对</span><span class="drawer-meta-value">USDT/CNY</span></div>
+        <div class="drawer-meta-row"><span class="drawer-meta-label">当前代付汇率</span><span class="drawer-meta-value" id="prfCurrent">—</span></div>
+      </div>
+      <div>
+        <div class="form-field-label"><span class="req">*</span>代付汇率</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-family:Inter;white-space:nowrap">1 USDT =</span><input class="field-input" style="flex:1" type="text" inputmode="decimal" autocomplete="off" id="prfRate" placeholder="大于 0，最多 4 位小数" oninput="cfSetErr('prfRate','')"><span>CNY</span></div>
+        <div class="field-err" id="prfRateErr"></div>
+      </div>
+      <div>
+        <div class="form-field-label"><span class="req">*</span>状态</div>
+        <div class="radio-group">
+          <label class="el-radio"><span class="el-radio__input"><input type="radio" name="prfStatus" id="prfStatusOn" value="on" class="el-radio__original"><span class="el-radio__inner"></span></span><span class="el-radio__label">启用</span></label>
+          <label class="el-radio"><span class="el-radio__input"><input type="radio" name="prfStatus" id="prfStatusOff" value="off" class="el-radio__original"><span class="el-radio__inner"></span></span><span class="el-radio__label">禁用</span></label>
+        </div>
+        <div class="field-hint">禁用后不再接收新代付订单，已派代付订单继续处理</div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-default btn-sm" onclick="closeModal('payoutRateModal')">取消</button><button class="btn btn-primary btn-sm" onclick="savePayoutRate()">保存</button></div>
+  </div>
+</div>
+
+<!-- ── 禁用代付汇率二次确认 Modal ── -->
+<div class="modal-overlay" id="payoutRateDisableModal">
+  <div class="modal" style="width:420px">
+    <div class="modal-header"><span class="modal-title">禁用代付汇率</span><span class="modal-close" onclick="closeModal('payoutRateDisableModal')"><i data-lucide="x"></i></span></div>
+    <div class="modal-body">
+      <div class="alert-box alert-warning"><i data-lucide="alert-triangle" class="alert-icon" style="width:15px;height:15px"></i><span>禁用后将不再接收新代付订单，已派代付订单继续处理，收款业务不受影响。确认禁用？</span></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-default btn-sm" onclick="closeModal('payoutRateDisableModal')">取消</button><button class="btn btn-danger btn-sm" onclick="closeModal('payoutRateDisableModal');commitPayoutRate()">确认禁用</button></div>
+  </div>
+</div>
+
+<!-- ── 新增 / 编辑代付通道 ── -->
+<div class="modal-overlay" id="payoutChannelModal">
+  <div class="modal" style="width:620px;max-width:calc(100vw - 32px)">
+    <div class="modal-header"><span class="modal-title" id="pcFormTitle">新增代付通道</span><span class="modal-close" onclick="closeModal('payoutChannelModal')"><i data-lucide="x"></i></span></div>
+    <div class="modal-body">
+      <div class="drawer-meta-row" id="pcFormIdRow" style="display:none"><span class="drawer-meta-label">通道编号</span><span class="drawer-meta-value" id="pcFormId"></span></div>
+      <div><label class="form-field-label" for="pcfCurrency"><span class="req">*</span>币种</label><select class="field-select" style="width:100%" id="pcfCurrency"><option value="CNY">CNY</option></select><div class="field-err" id="pcfCurrencyErr"></div></div>
+      <div><div class="form-field-label" id="pcBanksLabel"><span class="req">*</span>支持银行</div><div id="pcfBanks" role="group" aria-labelledby="pcBanksLabel" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:12px;border:1px solid #DCDFE6;border-radius:4px"></div><div class="field-err" id="pcfBanksErr"></div><div class="field-hint">选择客户收款账户支持的银行，可多选。</div></div>
+      <div><div class="edit-row">
+        <div><label class="form-field-label" for="pcfStart"><span class="req">*</span>服务开始时间</label><input class="field-input" style="width:100%" type="time" id="pcfStart" oninput="updatePayoutChannelPreview()"><div class="field-err" id="pcfStartErr"></div></div>
+        <div><label class="form-field-label" for="pcfEnd"><span class="req">*</span>服务结束时间</label><input class="field-input" style="width:100%" type="time" id="pcfEnd" oninput="updatePayoutChannelPreview()"><div class="field-err" id="pcfEndErr"></div></div>
+      </div><div class="field-hint" id="pcServiceHint">服务结束前 60 分钟停止派新单，已派订单按原截止时间继续处理。</div></div>
+      <div><div class="form-field-label"><span class="req">*</span>单笔金额（CNY）</div><div class="edit-row">
+        <div><input class="field-input" style="width:100%" id="pcfMin" inputmode="numeric" aria-label="单笔最小金额" placeholder="最小金额" oninput="updatePayoutChannelPreview()"><div class="field-err" id="pcfMinErr"></div></div>
+        <div><input class="field-input" style="width:100%" id="pcfMax" inputmode="numeric" aria-label="单笔最大金额" placeholder="最大金额" oninput="updatePayoutChannelPreview()"><div class="field-err" id="pcfMaxErr"></div></div>
+      </div><div class="field-hint" id="pcEffectiveHint"></div></div>
+      <div><label class="form-field-label" for="pcfLimit"><span class="req">*</span>时段额度（CNY）</label><input class="field-input" style="width:100%" id="pcfLimit" inputmode="numeric" placeholder="请输入时段额度" oninput="cfSetErr(this.id,'')"><div class="field-err" id="pcfLimitErr"></div><div class="field-hint">额度不得小于有效单笔最大额。降低额度后，已用部分保留，剩余不足时停止接新单。</div><div class="field-hint" id="pcUsedHint"></div></div>
+      <div><div class="form-field-label"><span class="req">*</span>状态</div><div class="radio-group" id="pcfStatus">
+        <label class="el-radio"><span class="el-radio__input"><input type="radio" name="pcfStatus" id="pcfStatusOn" class="el-radio__original"><span class="el-radio__inner"></span></span><span class="el-radio__label">启用</span></label>
+        <label class="el-radio"><span class="el-radio__input"><input type="radio" name="pcfStatus" id="pcfStatusOff" class="el-radio__original"><span class="el-radio__inner"></span></span><span class="el-radio__label">禁用</span></label>
+      </div><div class="field-err" id="pcfStatusErr"></div><div class="field-hint">新通道默认禁用；无有效金额交集时不可启用。通道与代付汇率均启用后，才满足对应派单条件。</div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-default btn-sm" onclick="closeModal('payoutChannelModal')">取消</button><button class="btn btn-primary btn-sm" onclick="savePayoutChannel()">保存</button></div>
+  </div>
+</div>
+<div class="modal-overlay" id="payoutChannelDisableModal">
+  <div class="modal" style="width:440px">
+    <div class="modal-header"><span class="modal-title">禁用代付通道</span><span class="modal-close" onclick="cancelPayoutChannelDisable()"><i data-lucide="x"></i></span></div>
+    <div class="modal-body"><div class="alert-box alert-warning"><i data-lucide="alert-triangle" class="alert-icon" style="width:15px;height:15px"></i><span id="pcDisableText"></span></div></div>
+    <div class="modal-footer"><button class="btn btn-default btn-sm" onclick="cancelPayoutChannelDisable()">取消</button><button class="btn btn-danger btn-sm" onclick="commitPayoutChannel()">确认禁用</button></div>
+  </div>
+</div>
+<div class="modal-overlay" id="payoutChannelHistoryModal">
+  <div class="modal" style="width:960px;max-width:calc(100vw - 32px)">
+    <div class="modal-header"><span class="modal-title" id="pcHistoryTitle">通道变更记录</span><span class="modal-close" onclick="closeModal('payoutChannelHistoryModal')"><i data-lucide="x"></i></span></div>
+    <div class="modal-body" style="padding:0;display:block"><div class="table-wrap"><table style="min-width:760px"><colgroup><col style="width:155px"><col style="width:70px"><col><col><col style="width:190px"></colgroup><thead><tr><th>变更时间</th><th>操作</th><th>变更前</th><th>变更后</th><th>操作人</th></tr></thead><tbody id="pcHistoryTbody"></tbody></table></div></div>
+    <div class="modal-footer"><button class="btn btn-default btn-sm" onclick="closeModal('payoutChannelHistoryModal')">关闭</button></div>
+  </div>
+</div>
+
 <!-- ── 删除收款卡 Modal ── -->
 <div class="modal-overlay" id="deleteCardModal">
   <div class="modal">
@@ -1428,7 +1648,7 @@ svg.lucide { stroke-width:1.5; display:block; }
 <!-- ── 补充举证 Modal：下单商户申诉、平台要求收款商户举证时上传本卡银行流水 ── -->
 <div class="modal-overlay" id="evidenceModal">
   <div class="modal">
-    <div class="modal-header"><span class="modal-title">补充举证</span><span class="modal-close" onclick="closeModal('evidenceModal')"><i data-lucide="x"></i></span></div>
+    <div class="modal-header"><span class="modal-title">举证</span><span class="modal-close" onclick="closeModal('evidenceModal')"><i data-lucide="x"></i></span></div>
     <div class="modal-body">
       <div class="alert-box alert-info"><i data-lucide="info" class="alert-icon" style="width:15px;height:15px"></i><span>下单商户对该订单发起了申诉，平台要求你上传本卡对应时间段的银行流水，用于裁定资金是否到账。</span></div>
       <div class="drawer-meta" id="evidenceOrderMeta"></div>
@@ -1467,6 +1687,171 @@ svg.lucide { stroke-width:1.5; display:block; }
   </div>
   <div class="drawer-body" id="odBody"></div>
   <div class="drawer-footer" id="odFooter" style="flex-direction:row;justify-content:flex-end"></div>
+</div>
+
+<!-- ── 代付订单详情 Drawer ── -->
+<div class="drawer-mask" id="payoutOrderDetailMask" onclick="closePayoutOrderDetail()"></div>
+<div class="drawer" id="payoutOrderDetail" style="width:620px"><div class="drawer-header"><div class="drawer-title"><span>代付订单详情</span><span class="drawer-close" onclick="closePayoutOrderDetail()"><i data-lucide="x"></i></span></div></div><div class="drawer-body" id="payoutOrderDetailBody"></div><div class="drawer-footer" id="payoutOrderDetailFooter" style="flex-direction:row;justify-content:flex-end;flex-wrap:wrap"></div></div>
+
+<!-- ── 代付 · 开始付款（二次确认） ── -->
+<div class="modal-overlay" id="poStartModal">
+  <div class="modal" style="width:480px">
+    <div class="modal-header"><span class="modal-title" style="display:flex;align-items:center;gap:8px"><i data-lucide="alert-circle" style="width:18px;height:18px;color:#E6A23C"></i><span>接单</span></span><span class="modal-close" onclick="closeModal('poStartModal')"><i data-lucide="x"></i></span></div>
+    <div class="modal-body">
+      <div class="drawer-meta" id="poStartMeta"></div>
+      <div class="alert-box alert-warning"><i data-lucide="alert-triangle" class="alert-icon" style="width:15px;height:15px"></i><span id="poStartText">—</span></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-default btn-sm" onclick="closeModal('poStartModal')">取消</button><button class="btn btn-primary btn-sm" id="poStartBtn" onclick="commitStartPayout()">确认接单</button></div>
+  </div>
+</div>
+
+<!-- ── 代付 · 未执行拒单 ── -->
+<div class="modal-overlay" id="poRejectModal">
+  <div class="modal" style="width:480px">
+    <div class="modal-header"><span class="modal-title">拒单</span><span class="modal-close" onclick="closeModal('poRejectModal')"><i data-lucide="x"></i></span></div>
+    <div class="modal-body">
+      <div class="alert-box alert-warning"><i data-lucide="alert-triangle" class="alert-icon" style="width:15px;height:15px"></i><span>拒单后订单将变为已拒绝，请勿继续付款。</span></div>
+      <div class="drawer-meta" id="poRejectMeta"></div>
+      <div>
+        <div class="form-field-label"><span class="req">*</span>拒单原因</div>
+        <div class="select-wrap" style="width:100%"><select class="field-select" id="poRejectReason" style="width:100%" onchange="cfSetErr(this.id,'');document.getElementById('poRejectNoteWrap').style.display=this.value==='其他'?'block':'none'"><option value="">请选择拒单原因</option><option>收款银行不支持</option><option>收款账户信息异常</option><option>付款资金不足</option><option>银行渠道维护</option><option>其他</option></select><i data-lucide="chevron-down" class="select-caret"></i></div>
+        <div class="field-err" id="poRejectReasonErr"></div>
+      </div>
+      <div id="poRejectNoteWrap" style="display:none">
+        <div class="form-field-label"><span class="req">*</span>原因说明</div>
+        <textarea class="field-input po-textarea" id="poRejectNote" maxlength="500" placeholder="请输入原因说明" oninput="cfSetErr(this.id,'');updateTextCount(this)"></textarea>
+        <div class="field-err" id="poRejectNoteErr"></div>
+        <div class="textarea-count" id="poRejectNoteCount">0/500</div>
+      </div>
+      <div>
+        <label class="po-check"><input type="checkbox" id="poRejectAck" onchange="cfSetErr(this.id,'')"><span>我确认本订单未发生任何转账</span></label>
+        <div class="field-err" id="poRejectAckErr"></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-default btn-sm" onclick="closeModal('poRejectModal')">取消</button><button class="btn btn-danger btn-sm" onclick="submitPayoutReject()">确认拒单</button></div>
+  </div>
+</div>
+
+<!-- ── 代付 · 提交付款记录（付款 / 补报付款） ── -->
+<div class="modal-overlay" id="poPayModal">
+  <div class="modal" style="width:600px">
+    <div class="modal-header"><span class="modal-title" id="poPayTitle">付款</span><span class="modal-close" onclick="closeModal('poPayModal')"><i data-lucide="x"></i></span></div>
+    <div class="modal-body">
+      <div class="alert-box alert-info" id="poPayAlert"><i data-lucide="info" class="alert-icon" style="width:15px;height:15px"></i><span id="poPayAlertText">—</span></div>
+      <div class="drawer-meta" id="poPayMeta"></div>
+      <div class="po-form-grid">
+        <div>
+          <div class="form-field-label"><span class="req">*</span>实际付款金额（CNY）</div>
+          <input class="field-input" style="width:100%" id="poPayAmount" inputmode="decimal" placeholder="请输入实际付款金额" oninput="amt2Input(this);updatePoPayOutcome()">
+          <div class="field-err" id="poPayAmountErr"></div>
+          <div class="field-hint" id="poPayAmountHint"></div>
+        </div>
+        <div>
+          <div class="form-field-label"><span class="req">*</span>付款时间</div>
+          <input class="field-input" style="width:100%" type="datetime-local" step="1" id="poPayTime" onchange="cfSetErr(this.id,'')">
+          <div class="field-err" id="poPayTimeErr"></div>
+        </div>
+        <div>
+          <div class="form-field-label"><span class="req">*</span>付款账户名</div>
+          <input class="field-input" style="width:100%" id="poPayAccName" maxlength="50" placeholder="请输入付款账户名" oninput="cfSetErr(this.id,'')">
+          <div class="field-err" id="poPayAccNameErr"></div>
+        </div>
+        <div>
+          <div class="form-field-label"><span class="req">*</span>付款卡号</div>
+          <input class="field-input" style="width:100%" id="poPayCardNo" maxlength="40" placeholder="请输入付款卡号" oninput="cfSetErr(this.id,'')">
+          <div class="field-err" id="poPayCardNoErr"></div>
+        </div>
+        <div>
+          <div class="form-field-label"><span class="req">*</span>付款银行</div>
+          <div class="select-wrap" style="width:100%"><select class="field-select" id="poPayBank" style="width:100%" onchange="cfSetErr(this.id,'')"><option value="">请选择付款银行</option><option value="ICBC">中国工商银行（ICBC）</option><option value="CCB">中国建设银行（CCB）</option><option value="ABC">中国农业银行（ABC）</option><option value="BOC">中国银行（BOC）</option><option value="BOCOM">交通银行（BOCOM）</option><option value="PSBC">中国邮政储蓄银行（PSBC）</option><option value="CMB">招商银行（CMB）</option><option value="CITIC">中信银行（CITIC）</option><option value="CEB">中国光大银行（CEB）</option><option value="HXB">华夏银行（HXB）</option><option value="CMBC">中国民生银行（CMBC）</option><option value="CGB">广发银行（CGB）</option><option value="PAB">平安银行（PAB）</option><option value="CIB">兴业银行（CIB）</option><option value="SPDB">浦发银行（SPDB）</option><option value="CZB">浙商银行（CZB）</option><option value="CBHB">渤海银行（CBHB）</option><option value="HFB">恒丰银行（HFB）</option><option value="BOB">北京银行（BOB）</option><option value="BOS">上海银行（BOS）</option><option value="JSB">江苏银行（JSB）</option><option value="NJCB">南京银行（NJCB）</option><option value="NBCB">宁波银行（NBCB）</option><option value="HZB">杭州银行（HZB）</option></select><i data-lucide="chevron-down" class="select-caret"></i></div>
+          <div class="field-err" id="poPayBankErr"></div>
+        </div>
+        <div>
+          <div class="form-field-label"><span class="req">*</span>银行流水号</div>
+          <input class="field-input" style="width:100%" id="poPaySerial" maxlength="64" placeholder="请输入银行流水号" oninput="cfSetErr(this.id,'')">
+          <div class="field-err" id="poPaySerialErr"></div>
+        </div>
+        <div>
+          <div class="form-field-label"><span class="req">*</span>银行处理状态</div>
+          <div class="select-wrap" style="width:100%"><select class="field-select" id="poPayBankStatus" style="width:100%" onchange="cfSetErr(this.id,'');updatePoPayOutcome()"><option value="">请选择银行处理状态</option><option value="succeeded">转账成功</option><option value="processing">银行处理中</option><option value="returned">已退回</option><option value="failed">转账失败</option></select><i data-lucide="chevron-down" class="select-caret"></i></div>
+          <div class="field-err" id="poPayBankStatusErr"></div>
+        </div>
+      </div>
+      <div>
+        <div class="form-field-label"><span class="req">*</span>付款凭证</div>
+        <button class="btn btn-default" onclick="document.getElementById('poPayFileInput').click()"><i data-lucide="upload" style="width:14px;height:14px"></i>上传文件</button>
+        <input type="file" id="poPayFileInput" multiple accept=".jpg,.jpeg,.png,.heic,.webp,.pdf" style="display:none" onchange="onPoFilesChange(this,'pay')">
+        <div class="field-hint">支持 JPG、JPEG、PNG、HEIC、WEBP、PDF，单个文件不超过 10MB，最多 5 个</div>
+        <div id="poPayFileList" class="po-file-list"></div>
+        <div class="field-err" id="poPayFileErr"></div>
+      </div>
+      <div>
+        <div class="form-field-label"><span class="req" id="poPayNoteReq" style="display:none">*</span>情况说明</div>
+        <textarea class="field-input po-textarea" id="poPayNote" maxlength="500" placeholder="请输入情况说明" oninput="cfSetErr(this.id,'');updateTextCount(this)"></textarea>
+        <div class="field-err" id="poPayNoteErr"></div>
+        <div class="textarea-count" id="poPayNoteCount">0/500</div>
+      </div>
+      <div class="alert-box" id="poPayOutcome" style="display:none"><i data-lucide="arrow-right-circle" class="alert-icon" style="width:15px;height:15px"></i><span id="poPayOutcomeText"></span></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-default btn-sm" onclick="closeModal('poPayModal')">取消</button><button class="btn btn-primary btn-sm" onclick="submitPayoutPayment()">提交</button></div>
+  </div>
+</div>
+
+<!-- ── 代付 · 付款异常 ── -->
+<div class="modal-overlay" id="poExcModal">
+  <div class="modal" style="width:520px">
+    <div class="modal-header"><span class="modal-title">付款异常</span><span class="modal-close" onclick="closeModal('poExcModal')"><i data-lucide="x"></i></span></div>
+    <div class="modal-body">
+      <div class="alert-box alert-warning"><i data-lucide="alert-triangle" class="alert-icon" style="width:15px;height:15px"></i><span>提交后订单转入「申诉中」，商户冻结保持不变，由 Paypaz 平台核实裁决。申诉受理后禁止新增转账，确需补款须线下与平台协调。</span></div>
+      <div class="drawer-meta" id="poExcMeta"></div>
+      <div>
+        <div class="form-field-label"><span class="req">*</span>异常类型</div>
+        <div class="select-wrap" style="width:100%"><select class="field-select" id="poExcType" style="width:100%" onchange="cfSetErr(this.id,'')"><option value="">请选择异常类型</option><option>少付</option><option>多付</option><option>分笔付款</option><option>银行处理中</option><option>付款被退回</option><option>付款至错误账户</option><option>其他</option></select><i data-lucide="chevron-down" class="select-caret"></i></div>
+        <div class="field-err" id="poExcTypeErr"></div>
+      </div>
+      <div>
+        <div class="form-field-label"><span class="req">*</span>异常说明</div>
+        <textarea class="field-input po-textarea" id="poExcNote" maxlength="500" placeholder="请输入异常说明" oninput="cfSetErr(this.id,'');updateTextCount(this)"></textarea>
+        <div class="field-err" id="poExcNoteErr"></div>
+        <div class="textarea-count" id="poExcNoteCount">0/500</div>
+      </div>
+      <div>
+        <div class="form-field-label">银行材料</div>
+        <button class="btn btn-default" onclick="document.getElementById('poExcFileInput').click()"><i data-lucide="upload" style="width:14px;height:14px"></i>上传文件</button>
+        <input type="file" id="poExcFileInput" multiple accept=".jpg,.jpeg,.png,.heic,.webp,.pdf" style="display:none" onchange="onPoFilesChange(this,'exc')">
+        <div class="field-hint">已有银行流水 / 退回凭证可一并上传；支持 JPG、JPEG、PNG、HEIC、WEBP、PDF，单个文件不超过 10MB，最多 5 个</div>
+        <div id="poExcFileList" class="po-file-list"></div>
+        <div class="field-err" id="poExcFileErr"></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-default btn-sm" onclick="closeModal('poExcModal')">取消</button><button class="btn btn-primary btn-sm" onclick="submitPayoutException()">提交</button></div>
+  </div>
+</div>
+
+<!-- ── 代付 · 补充材料（申诉中随时可提交，无截止时间；说明与附件至少填一项） ── -->
+<div class="modal-overlay" id="poEvidModal">
+  <div class="modal" style="width:520px">
+    <div class="modal-header"><span class="modal-title" id="poEvidTitle">补充材料</span><span class="modal-close" onclick="closeModal('poEvidModal')"><i data-lucide="x"></i></span></div>
+    <div class="modal-body">
+      <div class="alert-box alert-info"><i data-lucide="info" class="alert-icon" style="width:15px;height:15px"></i><span>申诉处理期间可随时补充，没有截止时间；可多次提交，不覆盖之前的材料。说明和附件至少填一项。</span></div>
+      <div class="drawer-meta" id="poEvidMeta"></div>
+      <div>
+        <div class="form-field-label">附件</div>
+        <button class="btn btn-default" onclick="document.getElementById('poEvidFileInput').click()"><i data-lucide="upload" style="width:14px;height:14px"></i>上传文件</button>
+        <input type="file" id="poEvidFileInput" multiple accept=".jpg,.jpeg,.png,.heic,.webp,.pdf" style="display:none" onchange="onPoFilesChange(this,'evid')">
+        <div class="field-hint">支持 JPG、JPEG、PNG、HEIC、WEBP、PDF，单个文件不超过 10MB，最多 5 个</div>
+        <div id="poEvidFileList" class="po-file-list"></div>
+        <div class="field-err" id="poEvidFileErr"></div>
+      </div>
+      <div>
+        <div class="form-field-label">说明</div>
+        <textarea class="field-input po-textarea" id="poEvidNote" maxlength="500" placeholder="请输入说明" oninput="cfSetErr(this.id,'');updateTextCount(this)"></textarea>
+        <div class="field-err" id="poEvidNoteErr"></div>
+        <div class="textarea-count" id="poEvidNoteCount">0/500</div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-default btn-sm" onclick="closeModal('poEvidModal')">取消</button><button class="btn btn-primary btn-sm" onclick="submitPayoutEvidence()">提交</button></div>
+  </div>
 </div>
 
 <!-- ── 充提记录详情 Drawer ── -->
@@ -1562,6 +1947,7 @@ svg.lucide { stroke-width:1.5; display:block; }
   </div>
 </div>
 
+<div class="tip-pop" id="tipPop" role="tooltip"></div>
 <div class="toast" id="toast"><i data-lucide="check-circle" class="toast-icon-success" id="toastIconEl" style="width:16px;height:16px"></i><span id="toastMsg">操作成功</span></div>
 
 <script>
@@ -1586,6 +1972,17 @@ var RATE_HISTORY = [
 ];
 var RATE_ENABLED = true;            // 币对状态，默认启用；禁用后平台不再向本收款服务商派新订单，进行中的订单不受影响
 var CAN_EDIT_RATE = true;           // 演示：当前账号是否有「汇率配置 · 编辑」权限；无权限时不显示编辑图标
+
+/* 代付汇率：与收款 Rc、启停和日志独立；原型使用内存演示数据。 */
+var PAYOUT_RATE = '7.10';
+var PAYOUT_RATE_ENABLED = true;
+var PAYOUT_RATE_UPDATED_AT = '2026-10-16 09:30:12';
+var PAYOUT_RATE_HISTORY = [
+  { time:'2026-10-16 09:30:12', before:'1 USDT = 7.08 CNY · 启用', after:'1 USDT = 7.10 CNY · 启用', operator:'chen.li@huize-fin.com' },
+  { time:'2026-10-15 09:00:05', before:'1 USDT = 7.08 CNY · 禁用', after:'1 USDT = 7.08 CNY · 启用', operator:'chen.li@huize-fin.com' },
+  { time:'2026-10-14 18:00:41', before:'1 USDT = 7.08 CNY · 启用', after:'1 USDT = 7.08 CNY · 禁用', operator:'zhou.tao@huize-fin.com' },
+  { time:'2026-10-14 09:00:47', before:'1 USDT = 7.05 CNY · 启用', after:'1 USDT = 7.08 CNY · 启用', operator:'zhou.tao@huize-fin.com' },
+];
 
 var CARDS = [
   { id:'CA-0001', cardNo:'6225 8801 2345 3391', name:'陈立', bank:'招商银行 深圳分行', start:'09:00', end:'17:00', limit:5000000, minAmt:200000, maxAmt:500000, ethnic:'汉族', country:'中国大陆', ageMin:18, ageMax:64, bankBan:'江苏、浙江', enabled:true, created:'2026-09-30 10:12:05' },
@@ -1746,14 +2143,24 @@ var activeTopNavEl = document.querySelector('.nav-item.active');
 function switchPage(pageId, navEl) {
   document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
   document.getElementById(pageId).classList.add('active');
+  if (pageId === 'pagePayoutOrders') renderPayoutOrders();
   if (activeTopNavEl) activeTopNavEl.classList.remove('active');
   activeTopNavEl = navEl || null;
   if (navEl) navEl.classList.add('active');
   document.querySelectorAll('.nav-sub-item').forEach(function(i){ i.classList.remove('active'); });
   renderIcons();
 }
-function goPage(pageId) { switchPage(pageId, document.querySelector('.nav-item[data-page="'+pageId+'"]')); }
+function goPage(pageId) {
+  var sub = document.querySelector('.nav-sub-item[data-page="'+pageId+'"]');
+  if (sub) { switchSubPage(pageId, sub.dataset.navkey); return; }
+  switchPage(pageId, document.querySelector('.nav-item[data-page="'+pageId+'"]'));
+}
 function switchSubPage(pageId, navKey) {
+  if (PO_PAGE_PERM[pageId] && !poHasPerm(PO_PAGE_PERM[pageId])) { showToast('无查看权限', 'error'); return; }   // 代付页面按查看权限控制
+  if (pageId === 'pagePayoutChannels') renderPayoutChannels();
+  if (pageId === 'pagePayoutOrders') renderPayoutOrders();
+  var item = document.querySelector('.nav-sub-item[data-navkey="'+navKey+'"]'), group = item && item.parentElement;   // 跳转时展开所在分组
+  if (group && !group.classList.contains('open')) { group.classList.add('open'); if (group.previousElementSibling) group.previousElementSibling.classList.add('open'); }
   document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
   document.getElementById(pageId).classList.add('active');
   if (activeTopNavEl) activeTopNavEl.classList.remove('active');
@@ -1794,11 +2201,111 @@ function showToast(msg, type) {
   toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 3200);
 }
 function copyText(text) {
-  if (navigator.clipboard) navigator.clipboard.writeText(text).then(function(){ showToast('已复制到剪贴板'); });
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(function(){ showToast('已复制'); });
 }
 function renderIcons(){ if (window.lucide) lucide.createIcons(); }
+/* 说明气泡：优先显示在图标上方，空间不足时显示在下方；水平方向限制在视口内，箭头始终指向图标 */
+var tipAnchor = null;
+function showTip(el) {
+  var pop = document.getElementById('tipPop'), r = el.getBoundingClientRect();
+  if (tipAnchor && tipAnchor !== el) tipAnchor.classList.remove('on');
+  tipAnchor = el; el.classList.add('on');
+  pop.textContent = el.dataset.tip;
+  pop.classList.add('show');
+  var w = pop.offsetWidth, h = pop.offsetHeight, cx = r.left + r.width / 2;
+  var left = Math.max(8, Math.min(cx - w / 2, window.innerWidth - w - 8));
+  var below = r.top - h - 8 < 8;
+  pop.classList.toggle('below', below);
+  pop.style.left = left + 'px';
+  pop.style.top = (below ? r.bottom + 8 : r.top - h - 8) + 'px';
+  pop.style.setProperty('--ax', (cx - left) + 'px');
+}
+function hideTip() {
+  document.getElementById('tipPop').classList.remove('show');
+  if (tipAnchor) tipAnchor.classList.remove('on');
+  tipAnchor = null;
+}
+function toggleTip(el, e) {   // 移动端无悬停：点击切换显示
+  e.stopPropagation();
+  if (e.pointerType === 'mouse') { showTip(el); return; }   // 鼠标已由悬停控制，点击不收起
+  if (tipAnchor === el && document.getElementById('tipPop').classList.contains('show')) hideTip(); else showTip(el);
+}
+document.addEventListener('click', hideTip);
+document.addEventListener('scroll', hideTip, true);
+window.addEventListener('resize', hideTip);
 
-/* 新订单 / 用户提交凭证提醒：仅 WhatsApp 消息通知（由后端发送，原型不模拟）；本期不做声音提醒 */
+/* 消息提醒统一走 TG（由后端发送，原型不模拟）；本期不做声音提醒。代收：新订单 / 用户提交凭证提醒；代付：新订单、付款超时、转申诉提醒 */
+
+/* =========================================================================
+ * 4.4 · 代付订单数据（收款服务商视角，仅本服务商订单）
+ * 服务商可见：CNY、收款人 KYC / 收款账户、Rc、Y、付款与申诉材料；不含 Rm、加点、X、手续费、商户名称。
+ * 截止时间存绝对时间戳：t0 接单截止＝派单起 30 分钟；t1 付款截止＝接单起 30 分钟（接单时生成，未接单为 null）；t2 有效付款凭证提交起 30 分钟。补充材料无截止时间。
+ * 对应 API 字段：t0 → acceptDeadlineAt，t1 → paymentDeadlineAt，t2 → confirmationDeadlineAt。
+ * 演示时间以打开页面时刻为基准，方便看到倒计时与超时迁移。
+ * ========================================================================= */
+var PO_NOW = Date.now();
+function poAt(min) { return PO_NOW + min * 60000; }
+function poYCents(cny, rc) { return Math.floor(cny * 1e6 / Math.round(parseFloat(rc) * 10000)); }   // Y＝CNY÷Rc，向下取整至 2 位小数（按分整数计算）
+function poOrder(d) {
+  return Object.assign({ executionStatus:'not_started', records:[], appeal:null, t1:null, t2:null, history:[] }, d, { y:poYCents(d.cny, d.rc) / 100 });
+}
+function poCh(id, period) { return { id:id, period:period, date:payoutChinaClock().date }; }
+var PAYOUT_ORDERS = [
+  poOrder({ id:'PZPO20261016-00012', cny:100000, rc:'7.10', payee:'陈立', idType:'居民身份证', idNo:'110101********1234', accountName:'陈立', accountNo:'6225880112345678', bank:'招商银行', bankCode:'CMB', channel:poCh('POC-0001','09:00–17:00'),
+    status:'pending_accept', created:poAt(-5), t0:poAt(25), history:[{ time:poAt(-5), text:'收到代付订单，等待接单', op:'系统' }] }),
+  poOrder({ id:'PZPO20261016-00011', cny:50000, rc:'7.10', payee:'林晓', idType:'居民身份证', idNo:'310101********5678', accountName:'林晓', accountNo:'6217003810001123456', bank:'中国建设银行', bankCode:'CCB', channel:poCh('POC-0001','09:00–17:00'),
+    status:'pending_payment', executionStatus:'executing', created:poAt(-18), t0:poAt(12), t1:poAt(20), startedAt:poAt(-10), startedBy:'lin.xi@huize-fin.com',
+    history:[{ time:poAt(-18), text:'收到代付订单，等待接单', op:'系统' }, { time:poAt(-10), text:'已接单，等待付款', op:'lin.xi@huize-fin.com' }] }),
+  poOrder({ id:'PZPO20261016-00010', cny:20000, rc:'7.10', payee:'黄磊', idType:'居民身份证', idNo:'440301********2219', accountName:'黄磊', accountNo:'6222021001112223334', bank:'中国工商银行', bankCode:'ICBC', channel:poCh('POC-0001','09:00–17:00'),
+    status:'pending_accept', created:poAt(-27), t0:poAt(3), history:[{ time:poAt(-27), text:'收到代付订单，等待接单', op:'系统' }] }),
+  poOrder({ id:'PZPO20261016-00009', cny:100000, rc:'7.10', payee:'王敏', idType:'居民身份证', idNo:'440101********3321', accountName:'王敏', accountNo:'6216610200009988776', bank:'中国银行', bankCode:'BOC', channel:poCh('POC-0002','09:00–18:00'),
+    status:'pending_confirmation', executionStatus:'reported', created:poAt(-40), t0:poAt(-10), t1:poAt(0), t2:poAt(18), startedAt:poAt(-30), startedBy:'chen.li@huize-fin.com',
+    records:[{ id:'PR-0009-1', kind:'normal', amount:100000, paidAt:poAt(-16), payerName:'汇泽金融（深圳）有限公司', payerBank:'招商银行', payerBankCode:'CMB', payerCardNo:'6225880188880088', serial:'CMB2026101600090001', bankStatus:'succeeded', files:[{ name:'付款回单_00009.jpg', size:312000 }], by:'chen.li@huize-fin.com', at:poAt(-12) }],
+    history:[{ time:poAt(-40), text:'收到代付订单，等待接单', op:'系统' }, { time:poAt(-30), text:'已接单，等待付款', op:'chen.li@huize-fin.com' }, { time:poAt(-12), text:'已付款 100,000.00 CNY，订单进入待确认到账', op:'chen.li@huize-fin.com' }] }),
+  poOrder({ id:'PZPO20261016-00008', cny:80000, rc:'7.10', payee:'赵宁', idType:'居民身份证', idNo:'320101********7790', accountName:'赵宁', accountNo:'6228480010003344556', bank:'中国农业银行', bankCode:'ABC', channel:poCh('POC-0002','09:00–18:00'),
+    status:'appealed', executionStatus:'reported', created:poAt(-90), t0:poAt(-60), t1:poAt(-35), t2:poAt(-8), startedAt:poAt(-65), startedBy:'lin.xi@huize-fin.com',
+    records:[{ id:'PR-0008-1', kind:'normal', amount:80000, paidAt:poAt(-42), payerName:'汇泽金融（深圳）有限公司', payerBank:'招商银行', payerBankCode:'CMB', payerCardNo:'6225880188880088', serial:'CMB2026101600080001', bankStatus:'succeeded', files:[{ name:'付款凭证_00008.pdf', size:186000 }], by:'lin.xi@huize-fin.com', at:poAt(-38) }],
+    appeal:{ source:'confirm_timeout', reason:'商户确认截止前未确认到账', created:poAt(-8), items:[] },
+    history:[{ time:poAt(-90), text:'收到代付订单，等待接单', op:'系统' }, { time:poAt(-65), text:'已接单，等待付款', op:'lin.xi@huize-fin.com' }, { time:poAt(-38), text:'已付款 80,000.00 CNY，订单进入待确认到账', op:'lin.xi@huize-fin.com' }, { time:poAt(-8), text:'商户确认超时（付款提交后 30 分钟内未确认），订单转入申诉中，由平台核实', op:'系统' }] }),
+  poOrder({ id:'PZPO20261016-00007', cny:100000, rc:'7.10', payee:'周怡', idType:'居民身份证', idNo:'510101********6802', accountName:'周怡', accountNo:'6222600110005566778', bank:'交通银行', bankCode:'BOCOM', channel:poCh('POC-0002','09:00–18:00'),
+    status:'appealed', executionStatus:'executing', created:poAt(-100), t0:poAt(-70), t1:poAt(-65), startedAt:poAt(-95), startedBy:'chen.li@huize-fin.com',
+    appeal:{ source:'timeout', reason:'接单后 30 分钟内未提交有效付款凭证', created:poAt(-65),
+      items:[] },
+    history:[{ time:poAt(-100), text:'收到代付订单，等待接单', op:'系统' }, { time:poAt(-95), text:'已接单，等待付款', op:'chen.li@huize-fin.com' }, { time:poAt(-65), text:'付款超时（接单后 30 分钟内未提交有效付款），订单转入申诉中，由平台核实', op:'系统' }] }),
+  poOrder({ id:'PZPO20261016-00006', cny:100000, rc:'7.10', payee:'孙明', idType:'居民身份证', idNo:'330101********5193', accountName:'孙明', accountNo:'6222021000003344556', bank:'中国工商银行', bankCode:'ICBC', channel:poCh('POC-0001','09:00–17:00'),
+    status:'appealed', executionStatus:'reported', created:poAt(-150), t0:poAt(-120), t1:poAt(-115), startedAt:poAt(-145), startedBy:'chen.li@huize-fin.com',
+    records:[{ id:'PR-0006-1', kind:'normal', amount:80000, paidAt:poAt(-132), payerName:'汇泽金融（深圳）有限公司', payerBank:'招商银行', payerBankCode:'CMB', payerCardNo:'6225880188880088', serial:'CMB2026101600060001', bankStatus:'succeeded', files:[{ name:'付款回单_00006.png', size:265000 }], by:'chen.li@huize-fin.com', at:poAt(-128) }],
+    appeal:{ source:'partner', reason:'少付：实际付款 80,000.00 CNY，少于订单金额', created:poAt(-128), items:[] },
+    history:[{ time:poAt(-150), text:'收到代付订单，等待接单', op:'系统' }, { time:poAt(-145), text:'已接单，等待付款', op:'chen.li@huize-fin.com' }, { time:poAt(-128), text:'已付款 80,000.00 CNY（少付），订单转入申诉中，由平台核实', op:'chen.li@huize-fin.com' }] }),
+  poOrder({ id:'PZPO20261016-00005', cny:60000, rc:'7.10', payee:'吴婷', idType:'居民身份证', idNo:'610101********7604', accountName:'吴婷', accountNo:'6216610200001122334', bank:'中国银行', bankCode:'BOC', channel:poCh('POC-0002','09:00–18:00'),
+    status:'appealed', executionStatus:'reported', created:poAt(-200), t0:poAt(-170), t1:poAt(-165), t2:poAt(-150), startedAt:poAt(-195), startedBy:'lin.xi@huize-fin.com',
+    records:[{ id:'PR-0005-1', kind:'normal', amount:60000, paidAt:poAt(-184), payerName:'汇泽金融（深圳）有限公司', payerBank:'招商银行', payerBankCode:'CMB', payerCardNo:'6225880188880088', serial:'CMB2026101600050001', bankStatus:'succeeded', files:[{ name:'付款回单_00005.jpg', size:298000 }], by:'lin.xi@huize-fin.com', at:poAt(-180) }],
+    appeal:{ source:'merchant', reason:'商户反馈客户指定账户未收到款项', created:poAt(-160),
+      items:[
+        { party:'partner', time:poAt(-150), by:'lin.xi@huize-fin.com', note:'已按订单收款账户转账，附银行回单。', files:[{ name:'付款回单_00005_补充.jpg', size:305000 }] }
+      ] },
+    history:[{ time:poAt(-200), text:'收到代付订单，等待接单', op:'系统' }, { time:poAt(-195), text:'已接单，等待付款', op:'lin.xi@huize-fin.com' }, { time:poAt(-180), text:'已付款 60,000.00 CNY，订单进入待确认到账', op:'lin.xi@huize-fin.com' }, { time:poAt(-160), text:'商户提交异议，订单转入申诉中，由平台核实', op:'下单商户' }, { time:poAt(-150), text:'补充材料（1 个文件）', op:'lin.xi@huize-fin.com' }] }),
+  poOrder({ id:'PZPO20261016-00004', cny:100000, rc:'7.10', payee:'李娜', idType:'居民身份证', idNo:'420101********4471', accountName:'李娜', accountNo:'6225880199887766', bank:'招商银行', bankCode:'CMB', channel:poCh('POC-0001','09:00–17:00'),
+    status:'completed', executionStatus:'reported', created:poAt(-300), t0:poAt(-270), t1:poAt(-266), t2:poAt(-252), startedAt:poAt(-296), startedBy:'chen.li@huize-fin.com', completedAt:poAt(-265), confirmSource:'merchant',
+    records:[{ id:'PR-0004-1', kind:'normal', amount:100000, paidAt:poAt(-286), payerName:'汇泽金融（深圳）有限公司', payerBank:'招商银行', payerBankCode:'CMB', payerCardNo:'6225880188880088', serial:'CMB2026101600040001', bankStatus:'succeeded', files:[{ name:'付款回单_00004.png', size:241000 }], by:'chen.li@huize-fin.com', at:poAt(-282) }],
+    history:[{ time:poAt(-300), text:'收到代付订单，等待接单', op:'系统' }, { time:poAt(-296), text:'已接单，等待付款', op:'chen.li@huize-fin.com' }, { time:poAt(-282), text:'已付款 100,000.00 CNY，订单进入待确认到账', op:'chen.li@huize-fin.com' }, { time:poAt(-265), text:'商户确认到账，订单成功，代付入账 14,084.50 USDT', op:'下单商户' }] }),
+  poOrder({ id:'PZPO20261015-00003', cny:30000, rc:'7.08', payee:'刘洋', idType:'护照', idNo:'E1234****', accountName:'刘洋', accountNo:'6217003810009876543', bank:'中国建设银行', bankCode:'CCB', channel:{ id:'POC-0001', period:'09:00–17:00', date:'' },
+    status:'completed', executionStatus:'reported', created:poAt(-1560), t0:poAt(-1530), t1:poAt(-1526), t2:poAt(-1512), startedAt:poAt(-1556), startedBy:'lin.xi@huize-fin.com', completedAt:poAt(-1490), confirmSource:'ruling',
+    records:[{ id:'PR-0003-1', kind:'normal', amount:30000, paidAt:poAt(-1546), payerName:'汇泽金融（深圳）有限公司', payerBank:'招商银行', payerBankCode:'CMB', payerCardNo:'6225880188880088', serial:'CMB2026101500030001', bankStatus:'succeeded', files:[{ name:'付款回单_00003.jpg', size:276000 }], by:'lin.xi@huize-fin.com', at:poAt(-1542) }],
+    appeal:{ source:'confirm_timeout', reason:'商户确认截止前未确认到账', created:poAt(-1512), items:[] },
+    history:[{ time:poAt(-1560), text:'收到代付订单，等待接单', op:'系统' }, { time:poAt(-1556), text:'已接单，等待付款', op:'lin.xi@huize-fin.com' }, { time:poAt(-1542), text:'已付款 30,000.00 CNY，订单进入待确认到账', op:'lin.xi@huize-fin.com' }, { time:poAt(-1512), text:'商户确认超时（付款提交后 30 分钟内未确认），订单转入申诉中，由平台核实', op:'系统' }, { time:poAt(-1490), text:'平台裁定足额到账，订单成功，代付入账 4,237.28 USDT', op:'平台' }] }),
+  poOrder({ id:'PZPO20261016-00013', cny:30000, rc:'7.10', payee:'冯涛', idType:'居民身份证', idNo:'210101********5521', accountName:'冯涛', accountNo:'6228480010007788990', bank:'中国农业银行', bankCode:'ABC', channel:poCh('POC-0002','09:00–18:00'),
+    status:'rejected', created:poAt(-75), t0:poAt(-45), failedAt:poAt(-45), failCode:'accept_timeout',
+    history:[{ time:poAt(-75), text:'收到代付订单，等待接单', op:'系统' }, { time:poAt(-45), text:'接单超时（派单后 30 分钟内未接单），订单已拒绝', op:'系统' }] }),
+  poOrder({ id:'PZPO20261016-00002', cny:100000, rc:'7.10', payee:'何静', idType:'居民身份证', idNo:'350101********0628', accountName:'何静', accountNo:'6225880155554444', bank:'招商银行', bankCode:'CMB', channel:poCh('POC-0001','09:00–17:00'),
+    status:'rejected', created:poAt(-420), t0:poAt(-390), failedAt:poAt(-412), failCode:'partner_rejected', rejectReason:'收款账户信息异常',
+    history:[{ time:poAt(-420), text:'收到代付订单，等待接单', op:'系统' }, { time:poAt(-412), text:'拒单（收款账户信息异常），订单已拒绝', op:'chen.li@huize-fin.com' }] }),
+  poOrder({ id:'PZPO20261015-00001', cny:50000, rc:'7.08', payee:'郑凯', idType:'居民身份证', idNo:'500101********3317', accountName:'郑凯', accountNo:'6222021001234567890', bank:'中国工商银行', bankCode:'ICBC', channel:{ id:'POC-0001', period:'09:00–17:00', date:'' },
+    status:'failed', executionStatus:'executing', created:poAt(-1700), t0:poAt(-1670), t1:poAt(-1660), startedAt:poAt(-1690), startedBy:'chen.li@huize-fin.com', failedAt:poAt(-1600), failCode:'platform_unfreeze',
+    appeal:{ source:'timeout', reason:'接单后 30 分钟内未提交有效付款凭证', created:poAt(-1660), items:[] },
+    history:[{ time:poAt(-1700), text:'收到代付订单，等待接单', op:'系统' }, { time:poAt(-1690), text:'已接单，等待付款', op:'chen.li@huize-fin.com' }, { time:poAt(-1660), text:'付款超时（接单后 30 分钟内未提交有效付款），订单转入申诉中，由平台核实', op:'系统' }, { time:poAt(-1600), text:'平台裁定全额解冻，订单失败', op:'平台' }] })
+];
+PAYOUT_ORDERS.forEach(function(o){ if (!o.channel.date) o.channel.date = fmtDateTime(o.created).slice(0, 10); });
 
 /* =========================================================================
  * 代币余额：可提现 = 总额 − 收款冻结 − 提现冻结（始终现算）
@@ -1812,11 +2319,12 @@ var LEDGER_TYPES = {
   freeze:         { label:'订单冻结',     cls:'badge-blue' },
   release:        { label:'订单释放',     cls:'badge-gray' },
   refund_release: { label:'退款释放',     cls:'badge-gray' },
-  deduct:         { label:'订单扣划',     cls:'badge-orange' },
+  deduct:         { label:'代收扣划',     cls:'badge-orange' },
   wd_freeze:      { label:'提现冻结',     cls:'badge-blue' },
   wd_done:        { label:'提现完成',     cls:'badge-orange' },
   wd_fee:         { label:'手续费',       cls:'badge-orange' },
   wd_reject:      { label:'提现驳回解冻', cls:'badge-gray' },
+  payout_credit:  { label:'代付入账',     cls:'badge-green' },
 };
 function tokenAvail() { return round2(TOKEN.balance - TOKEN.frozen - TOKEN.wdFrozen); }
 function applyLedger(type, amount, ref, rc, note, time, fee) {
@@ -1830,6 +2338,7 @@ function applyLedger(type, amount, ref, rc, note, time, fee) {
   else if (type === 'wd_done')   { TOKEN.wdFrozen -= amount + fee; TOKEN.balance -= amount; delta = -amount; frozenDelta = -(amount + fee); }
   else if (type === 'wd_reject') { TOKEN.wdFrozen -= amount + fee; frozenDelta = -(amount + fee); }
   else if (type === 'wd_fee')    { TOKEN.balance -= amount; delta = -amount; }
+  else if (type === 'payout_credit') { TOKEN.balance += amount; delta = amount; }   // 代付成功入账 Y：总余额与可提现同时增加，代付本身不冻结服务商 USDT
   TOKEN.balance = round2(TOKEN.balance); TOKEN.frozen = round2(TOKEN.frozen); TOKEN.wdFrozen = round2(TOKEN.wdFrozen);
   LEDGER.unshift({ time:time || fmtDateTime(new Date()), type:type, ref:ref, delta:delta, frozenDelta:frozenDelta, rc:rc, note:note,
     afterBalance:TOKEN.balance, afterAvail:tokenAvail(), afterFrozen:TOKEN.frozen, afterWdFrozen:TOKEN.wdFrozen });
@@ -1851,6 +2360,9 @@ function applyLedger(type, amount, ref, rc, note, time, fee) {
     ev.push({ t:o.created, f:function(){ applyLedger('freeze', o.y, o.id, o.rc, '下单冻结', o.created); } });
     var n = o.status === 'success' && o.ruling ? ['deduct', '平台裁定' + (o.ruling === 'ok' ? '无异常' : '资金已到账') + '，自动结算扣划'] : NOTES[o.status];
     if (n) ev.push({ t:o.done, f:function(){ applyLedger(n[0], o.y, o.id, o.rc, n[1], o.done); } });
+  });
+  PAYOUT_ORDERS.forEach(function(o){
+    if (o.status === 'completed') { var t = fmtDateTime(o.completedAt); ev.push({ t:t, f:function(){ applyLedger('payout_credit', o.y, o.id, o.rc, '代付成功入账（' + (o.confirmSource === 'ruling' ? '平台裁定足额到账' : '商户确认到账') + '）', t); } }); }
   });
   ev.sort(function(a, b){ return a.t < b.t ? -1 : a.t > b.t ? 1 : 0; }).forEach(function(e){ e.f(); });
 })();
@@ -1874,9 +2386,9 @@ function ledgerTime(t) { t = fullTime(t); return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}
  * 两张表各自逐行累加即可勾对「变动后总余额」「变动后冻结余额」 */
 var LEDGER_VIEWS = {
   ledger: {
-    types: { deposit:'充值入账', deduct:'订单扣划', wd_done:'提现完成', wd_fee:'手续费' },
+    types: { deposit:'充值入账', deduct:'代收扣划', payout_credit:'代付入账', wd_done:'提现完成', wd_fee:'手续费' },
     has: function(e){ return !!e.delta; },
-    cols: [['时间',140],['变动类型',80],['变动金额',120],['变动后总余额',120],['关联单号',190]],
+    cols: [['时间',140],['变动类型',80],['变动金额',120],['变动后总余额',120],['关联单号',190],['备注',220]],
     page:1, size:10
   },
   frozen: {
@@ -1920,7 +2432,7 @@ function renderLedgerView(v) {
       '<td class="asset-num">'+ledgerTime(e.time)+'</td>' +
       '<td><span class="badge '+t.cls+'">'+cfg.types[e.type]+'</span></td>' +
       '<td class="asset-num">'+(v === 'ledger' ? ledgerDeltaCell(e.delta) : ledgerFrozenCell(e.frozenDelta))+'</td>';
-    if (v === 'ledger') html += '<td class="asset-num">'+fmtUSDT(e.afterBalance)+' USDT</td>' + refTd;
+    if (v === 'ledger') html += '<td class="asset-num">'+fmtUSDT(e.afterBalance)+' USDT</td>' + refTd + '<td title="'+(e.note || '')+'">'+(e.note || empty)+'</td>';
     else html += '<td class="asset-num">'+fmtUSDT(round2(e.afterFrozen + e.afterWdFrozen))+' USDT</td>' + refTd;
     var tr = document.createElement('tr');
     tr.innerHTML = html;
@@ -1935,6 +2447,7 @@ function renderLedgerView(v) {
 /* 关联单号点击：订单号打开订单详情，充币 / 提币单号打开充提详情 */
 function openLedgerRef(ref) {
   if (/^PZPI/.test(ref)) { if (findOrder(ref)) openOrderDetail(ref); else showToast('订单不存在'); }
+  else if (/^PZPO/.test(ref)) { if (!poHasPerm('payout_orders_view')) showToast('无查看权限', 'error'); else if (findPayoutOrder(ref)) openPayoutOrderDetail(ref); else showToast('订单不存在'); }
   else if (/^(DP|WD)-/.test(ref)) { if (findFund(ref)) openFundDetail(ref); else showToast('记录不存在'); }
 }
 function renderLedgerTable() { renderLedgerView('ledger'); renderLedgerView('frozen'); }
@@ -2013,7 +2526,7 @@ function openDepositModal() {
   renderIcons();
 }
 function copyDepositAddr() {
-  if (navigator.clipboard) navigator.clipboard.writeText(depCurAddr()).then(function(){ showToast('复制成功'); });
+  if (navigator.clipboard) navigator.clipboard.writeText(depCurAddr()).then(function(){ showToast('已复制'); });
 }
 /* 确认充值：生成审核中的充币申报，不改变余额，运营核实到账后入账；错误显示在输入框下方 */
 function depSubmit() {
@@ -2355,7 +2868,7 @@ function renderCards() {
       '<td class="asset-num">添加 '+c.created+'<div class="cell-sub">更新 '+c.updated+'</div></td>' +
       '<td>'+status+'</td>' +
       '<td><div class="action-cell">' +
-        '<span class="action-icon" title="编辑" onclick="openCardForm(\''+c.id+'\')"><i data-lucide="pencil"></i></span>' +
+        '<button class="btn btn-link btn-sm" onclick="openCardForm(\''+c.id+'\')">编辑</button>' +
       '</div></td>';
     tbody.appendChild(tr);
   });
@@ -2592,7 +3105,7 @@ function orderCountdownCell(o) {
 function orderActions(o) {
   if (o.status === 'verify') return [['btn-primary','openOrderDrawer','核验']];
   if (APPEAL_STATUS.indexOf(o.status) !== -1 && o.ruling === 'refund') return [['btn-primary','openRefundModal','退款']];   // 裁定即生效：仅「需退款」仍需收款服务商线下退款并回传凭证
-  if (o.status === 'dispute' && o.appealBy === 'merchant' && o.evidenceReq && !o.evidence) return [['btn-primary','openEvidenceModal','补充举证']];
+  if (o.status === 'dispute' && o.appealBy === 'merchant' && o.evidenceReq && !o.evidence) return [['btn-primary','openEvidenceModal','举证']];
   return [];
 }
 function orderOpsCell(o) {
@@ -2664,6 +3177,11 @@ function orderUsdtCell(o) {
 }
 var ordPage = 1, ordPageSize = 10, ordFilter = {};
 function matchOrderStatus(o, st) { return !st || (st === 'appeal' ? APPEAL_STATUS.indexOf(o.status) !== -1 : o.status === st); }
+function readOrderFilter() {
+  var filters = {};
+  Object.keys(ORD_FILTER_IDS).forEach(function(k){ filters[k] = document.getElementById(ORD_FILTER_IDS[k]).value.trim(); });
+  return filters;
+}
 function filteredOrders() {
   var f = ordFilter;
   return ORDERS.filter(function(o){
@@ -2701,8 +3219,7 @@ function renderOrders() {
 }
 var ORD_FILTER_IDS = { id:'ordIdFilter', cust:'ordCustFilter', card:'ordCardFilter', status:'ordStatusFilter', creFrom:'ordCreFrom', creTo:'ordCreTo', doneFrom:'ordDoneFrom', doneTo:'ordDoneTo' };
 function searchOrders() {
-  ordFilter = {};
-  Object.keys(ORD_FILTER_IDS).forEach(function(k){ ordFilter[k] = document.getElementById(ORD_FILTER_IDS[k]).value.trim(); });
+  ordFilter = readOrderFilter();
   ordPage = 1;
   renderOrders();
 }
@@ -2710,7 +3227,39 @@ function resetOrderFilter() {
   Object.keys(ORD_FILTER_IDS).forEach(function(k){ document.getElementById(ORD_FILTER_IDS[k]).value = ''; });
   searchOrders();
 }
-function exportOrders() { showToast('已按当前筛选条件导出'); }   // 原型不生成文件
+function csvCell(value) {
+  var text = value == null ? '' : String(value);
+  if (/^[\s\u0000-\u001f]*[=+\-@]/.test(text)) text = "'" + text;
+  return '"' + text.replace(/"/g, '""') + '"';
+}
+function orderExportCountdown(o) {
+  if (o.status === 'pay') return fmtMMSS(o.payRemain);
+  if (o.status === 'verify') return o.respRemain <= 0 ? '超时 ' + Math.max(1, Math.floor((o.overdue || 0) / 60)) + ' 分钟' : fmtMMSS(o.respRemain);
+  return '';
+}
+function exportOrders() {
+  searchOrders();
+  var rows = filteredOrders();
+  if (!rows.length) { showToast('没有符合筛选条件的订单', 'error'); return; }
+  var headers = ['订单号','状态码','状态','申诉类型','申诉发起方','订单金额(CNY)','汇率(CNY/USDT)','代币金额(USDT)','代币状态','客户','收款卡号','账户名','开户银行','创建时间','付款凭证提交时间','处理倒计时/超时','实际到账金额(CNY)','异常原因','申诉说明','裁定结果','裁定时间','退款金额(CNY)','退款回传时间','完成时间','失败原因'];
+  var lines = [headers].concat(rows.map(function(o){
+    var card = o.cardSnapshot || {};
+    var appeal = appealInfo(o);
+    var usdtState = o.status === 'success' ? '已扣划' : (ACTIVE_STATUS.indexOf(o.status) !== -1 ? '冻结中' : '已释放');
+    return [o.id, o.status, STATUS[o.status] ? STATUS[o.status].label : o.status, appeal ? appeal.type : (STATUS[o.status] && STATUS[o.status].sub) || '', appeal ? appeal.by : '', o.cny, o.rc, o.y, usdtState, o.customer, card.cardNo, card.name, card.bank, o.created, o.proofTime, orderExportCountdown(o), o.verifyRec && o.verifyRec.arrived != null ? o.verifyRec.arrived : o.arrivedAmt, appeal ? appeal.reason : '', appeal ? appeal.note : '', appeal ? appeal.ruling : '', o.rulingTime, o.refundAmt, o.refundTime, o.done, o.failReason];
+  })).map(function(row){ return row.map(csvCell).join(','); }).join('\r\n');
+  var blob = new Blob(['\ufeff', lines], { type:'text/csv;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var link = document.createElement('a');
+  link.href = url;
+  link.download = '收款订单_' + nowStr().replace(/[-: ]/g, '') + '.csv';
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  showToast('已导出 ' + rows.length + ' 笔订单');
+}
 function setOrdPage(p) { ordPage = p; renderOrders(); }
 function setOrdPageSize(size) { ordPageSize = size; ordPage = 1; renderOrders(); }
 function goOrders(status) {   // 首页卡片跳转：带上状态筛选
@@ -3354,6 +3903,882 @@ function resetRateHistFilter() {
 function setRhPage(p) { rhPage = p; renderRateHistory(); }
 function setRhPageSize(size) { rhPageSize = size; rhPage = 1; renderRateHistory(); }
 
+/* 代付汇率配置（4.4 第一个功能点）：复用现有表格、筛选和分页组件。 */
+function payoutRateText(rate, enabled) { return '1 USDT = ' + rate + ' CNY · ' + (enabled ? '启用' : '禁用'); }
+function renderPayoutRates() {
+  document.getElementById('payoutRateTbody').innerHTML = '<tr><td>USDT/CNY</td><td class="asset-num">1 USDT = '+PAYOUT_RATE+' CNY</td>'
+    + '<td>'+(PAYOUT_RATE_ENABLED ? '<span class="badge badge-green">已启用</span>' : '<span class="badge badge-gray">已禁用</span>')+'</td>'
+    + '<td class="asset-num">'+fullTime(PAYOUT_RATE_UPDATED_AT)+'</td>'
+    + '<td>'+(poHasPerm('payout_rates_edit') ? '<span class="action-icon" title="编辑" onclick="openPayoutRateForm()"><i data-lucide="pencil"></i></span>' : '—')+'</td></tr>';
+  renderIcons();
+}
+function openPayoutRateForm() {
+  if (!poHasPerm('payout_rates_edit')) { showToast('无代付配置编辑权限', 'error'); return; }
+  pendingPayoutRate = null;
+  document.getElementById('prfCurrent').textContent = '1 USDT = ' + PAYOUT_RATE + ' CNY';
+  document.getElementById('prfRate').value = PAYOUT_RATE;
+  cfSetErr('prfRate', '');
+  document.getElementById(PAYOUT_RATE_ENABLED ? 'prfStatusOn' : 'prfStatusOff').checked = true;
+  openModal('payoutRateModal'); renderIcons();
+}
+var pendingPayoutRate = null;
+function savePayoutRate() {
+  if (!poHasPerm('payout_rates_edit')) { showToast('无代付配置编辑权限', 'error'); return; }
+  var raw = document.getElementById('prfRate').value.trim();
+  if (!/^(0|[1-9]\d*)(\.\d{1,4})?$/.test(raw) || !(Number(raw) > 0) || !Number.isFinite(Number(raw))) { cfSetErr('prfRate', '请输入大于 0 的汇率，最多 4 位小数'); return; }   // 不允许前导 0（如 07.2）
+  var enabled = document.getElementById('prfStatusOn').checked;
+  var rateChanged = parseFloat(raw) !== parseFloat(PAYOUT_RATE);
+  if (!rateChanged && enabled === PAYOUT_RATE_ENABLED) { closeModal('payoutRateModal'); showToast('汇率和状态未变化'); return; }   // 汇率和状态都没变：直接关闭，不写变更记录
+  pendingPayoutRate = { rate: rateChanged ? raw : PAYOUT_RATE, enabled: enabled };   // 汇率按收款服务商输入原样保存与展示（如 7.20 不变成 7.2）
+  if (PAYOUT_RATE_ENABLED && !enabled) { openModal('payoutRateDisableModal'); renderIcons(); return; }   // 启用 → 禁用需二次确认
+  commitPayoutRate();
+}
+function commitPayoutRate() {
+  if (!poHasPerm('payout_rates_edit')) { pendingPayoutRate = null; closeModal('payoutRateDisableModal'); showToast('无代付配置编辑权限', 'error'); return; }
+  if (!pendingPayoutRate) return;
+  var v = pendingPayoutRate, now = nowStr(), statusChanged = v.enabled !== PAYOUT_RATE_ENABLED;
+  PAYOUT_RATE_HISTORY.unshift({ time:now, before:payoutRateText(PAYOUT_RATE, PAYOUT_RATE_ENABLED), after:payoutRateText(v.rate, v.enabled), operator:CUR_OP });
+  PAYOUT_RATE = v.rate; PAYOUT_RATE_ENABLED = v.enabled; PAYOUT_RATE_UPDATED_AT = now; pendingPayoutRate = null;
+  closeModal('payoutRateModal');
+  closeModal('payoutRateDisableModal');
+  prhPage = 1;
+  renderPayoutRates(); renderPayoutRateHistory(); renderPayoutChannels();
+  showToast(statusChanged ? (v.enabled ? '代付汇率已启用，仅对新代付订单生效' : '代付汇率已禁用，已派代付订单继续处理') : '代付汇率已更新，仅对新代付订单生效');
+}
+/* 变更记录：按变更时间倒序（新记录 unshift 在最前），筛选、分页同其他列表 */
+var prhPage = 1, prhPageSize = 10;
+function renderPayoutRateHistory() {
+  var tbody = document.getElementById('payoutRateHistTbody');
+  var op = document.getElementById('prhOperatorFilter').value.trim();
+  var from = document.getElementById('prhFrom').value, to = document.getElementById('prhTo').value;
+  var rows = PAYOUT_RATE_HISTORY.filter(function(h){ return (!op || h.operator.indexOf(op) !== -1) && inDateRange(h.time, from, to); });
+  prhPage = clampPage(prhPage, rows.length, prhPageSize);
+  tbody.innerHTML = '';
+  pageSlice(rows, prhPage, prhPageSize).forEach(function(h){
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td class="asset-num">'+fullTime(h.time)+'</td><td class="asset-num">'+h.before+'</td><td class="asset-num">'+h.after+'</td><td>'+h.operator+'</td>';
+    tbody.appendChild(tr);
+  });
+  if (!rows.length) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#C0C4CC;height:80px">暂无数据</td></tr>';
+  document.getElementById('prhCount').textContent = rows.length;
+  renderPager('prhPager', rows.length, prhPage, prhPageSize, 'setPrhPage', 'setPrhPageSize');
+}
+function searchPayoutRateHist() {
+  var from = document.getElementById('prhFrom').value, to = document.getElementById('prhTo').value;
+  if (from && to && from > to) { showToast('开始日期不能晚于结束日期', 'error'); return; }
+  prhPage = 1; renderPayoutRateHistory(); }
+function resetPayoutRateHistFilter() {
+  ['prhOperatorFilter','prhFrom','prhTo'].forEach(function(id){ document.getElementById(id).value = ''; });
+  searchPayoutRateHist();
+}
+function setPrhPage(p) { prhPage = p; renderPayoutRateHistory(); }
+function setPrhPageSize(size) { prhPageSize = size; prhPage = 1; renderPayoutRateHistory(); }
+
+/* 4.4 · 代付通道管理：独立于收款卡；订单与资金处理由后续功能接入。 */
+var PAYOUT_PLATFORM_RANGE = { min:1000, max:100000 }; // PRD 当前建议值，独立于收款金额参数
+var PAYOUT_BANKS = [
+  {code:'ICBC',name:'中国工商银行'}, {code:'CCB',name:'中国建设银行'}, {code:'ABC',name:'中国农业银行'},
+  {code:'BOC',name:'中国银行'}, {code:'BOCOM',name:'交通银行'}, {code:'PSBC',name:'中国邮政储蓄银行'},
+  {code:'CMB',name:'招商银行'}, {code:'CITIC',name:'中信银行'}, {code:'CEB',name:'中国光大银行'},
+  {code:'HXB',name:'华夏银行'}, {code:'CMBC',name:'中国民生银行'}, {code:'CGB',name:'广发银行'},
+  {code:'PAB',name:'平安银行'}, {code:'CIB',name:'兴业银行'}, {code:'SPDB',name:'浦发银行'},
+  {code:'CZB',name:'浙商银行'}, {code:'CBHB',name:'渤海银行'}, {code:'HFB',name:'恒丰银行'},
+  {code:'BOB',name:'北京银行'}, {code:'BOS',name:'上海银行'}, {code:'JSB',name:'江苏银行'},
+  {code:'NJCB',name:'南京银行'}, {code:'NBCB',name:'宁波银行'}, {code:'HZB',name:'杭州银行'}
+];
+function payoutChinaClock() {
+  var parts = new Intl.DateTimeFormat('en-GB', {timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
+  var p = {}; parts.forEach(function(v){ p[v.type] = v.value; });
+  return {date:p.year+'-'+p.month+'-'+p.day, minutes:Number(p.hour)*60+Number(p.minute)};
+}
+var PAYOUT_CHANNELS = [
+  {id:'POC-0001',currency:'CNY',bankCodes:['ICBC','CCB','CMB'],start:'09:00',end:'17:00',minAmt:5000,maxAmt:80000,limit:5000000,enabled:true,updated:'2026-10-16 09:10:12',version:1},
+  {id:'POC-0002',currency:'CNY',bankCodes:['ABC','BOC','BOCOM'],start:'09:00',end:'18:00',minAmt:1000,maxAmt:100000,limit:1000000,enabled:true,updated:'2026-10-15 11:20:05',version:1},
+  {id:'POC-0003',currency:'CNY',bankCodes:['CITIC','PAB','SPDB'],start:'10:00',end:'16:00',minAmt:10000,maxAmt:50000,limit:2000000,enabled:false,updated:'2026-10-14 15:30:41',version:1},
+  {id:'POC-0004',currency:'CNY',bankCodes:['CMB'],start:'09:00',end:'17:00',minAmt:200000,maxAmt:500000,limit:5000000,enabled:false,updated:'2026-10-14 09:12:47',version:1}
+];
+/* 时段占用独立保存：按通道与 UTC+8 日期归属；编辑/启停只改配置，不能删除或挪动原时段额度。 */
+var PAYOUT_CHANNEL_PERIODS = [
+  {channelId:'POC-0001',date:payoutChinaClock().date,inProgress:320000,completed:1200000},
+  {channelId:'POC-0002',date:payoutChinaClock().date,inProgress:10000,completed:990000},
+  {channelId:'POC-0003',date:payoutChinaClock().date,inProgress:60000,completed:240000}
+];
+var PAYOUT_CHANNEL_HISTORY = PAYOUT_CHANNELS.map(function(c){return {channelId:c.id,time:c.updated,action:'新增',before:null,after:payoutChannelSnapshot(c),operator:'chen.li@huize-fin.com'};});
+var pcPage = 1, pcPageSize = 10, payoutChannelSeq = 5;
+var editingPayoutChannelId = null, editingPayoutChannelVersion = null, pendingPayoutChannel = null;
+var PC_FORM_FIELDS = {pcfCurrency:'currency',pcfStart:'start',pcfEnd:'end',pcfMin:'minAmt',pcfMax:'maxAmt',pcfLimit:'limit'};
+function payoutChannelSnapshot(c) {
+  return {currency:c.currency,bankCodes:c.bankCodes.slice().sort(),start:c.start,end:c.end,minAmt:c.minAmt,maxAmt:c.maxAmt,limit:c.limit,enabled:c.enabled};
+}
+function payoutChannelFind(id) { return PAYOUT_CHANNELS.find(function(c){return c.id === id;}); }
+function pcEscape(v) { return String(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function payoutBankLabel(b) { return b.name + '（' + b.code + '）'; }   // 支持银行：银行名称（银行编码），与代付订单开户银行展示一致
+function payoutBankNames(codes) { return codes.map(function(code){var b = PAYOUT_BANKS.find(function(v){return v.code === code;}); return b ? payoutBankLabel(b) : code;}).join('、'); }
+function payoutEffectiveRange(c) { var min = Math.max(c.minAmt,PAYOUT_PLATFORM_RANGE.min), max = Math.min(c.maxAmt,PAYOUT_PLATFORM_RANGE.max); return min <= max ? {min:min,max:max} : null; }
+function payoutChannelUsed(id, date) { return PAYOUT_CHANNEL_PERIODS.filter(function(p){return p.channelId === id && p.date === date;}).reduce(function(n,p){return n+p.inProgress+p.completed;},0); }
+function pcMinutes(v) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? Number(v.slice(0,2))*60+Number(v.slice(3)) : NaN; }
+function payoutChannelCondition(c, clock, remaining) {
+  var range = payoutEffectiveRange(c);
+  if (!c.enabled) return '已停止派新单';
+  if (!range) return '单笔范围无交集';
+  if (!PAYOUT_RATE_ENABLED) return '代付汇率已禁用';
+  if (clock.minutes < pcMinutes(c.start) || clock.minutes >= pcMinutes(c.end)) return '服务时段外';
+  if (clock.minutes >= pcMinutes(c.end)-60) return '结束前 60 分钟停派';
+  if (remaining < range.min) return '剩余额度不足';
+  return '通道条件满足';
+}
+function setupPayoutChannels() {
+  document.getElementById('pcBankFilter').innerHTML = '<option value="">全部银行</option>'+PAYOUT_BANKS.map(function(b){return '<option value="'+b.code+'">'+payoutBankLabel(b)+'</option>';}).join('');
+  document.getElementById('pcfBanks').innerHTML = PAYOUT_BANKS.map(function(b){return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="pcBank'+b.code+'" value="'+b.code+'" onchange="cfSetErr(\'pcfBanks\',\'\')">'+payoutBankLabel(b)+'</label>';}).join('');
+  renderPayoutChannels();
+}
+function renderPayoutChannels() {
+  var id = document.getElementById('pcIdFilter').value.trim().toUpperCase(), bank = document.getElementById('pcBankFilter').value, status = document.getElementById('pcStatusFilter').value;
+  var rows = PAYOUT_CHANNELS.filter(function(c){return (!id || c.id.indexOf(id)!==-1) && (!bank || c.bankCodes.indexOf(bank)!==-1) && (!status || c.enabled === (status==='on'));});
+  var clock = payoutChinaClock();
+  document.getElementById('pcCount').textContent = rows.length;
+  document.getElementById('pcAddBtn').style.display = poHasPerm('payout_channels_edit') ? 'inline-flex' : 'none';
+  pcPage = clampPage(pcPage,rows.length,pcPageSize);
+  document.getElementById('pcTbody').innerHTML = pageSlice(rows,pcPage,pcPageSize).map(function(c){
+    var range = payoutEffectiveRange(c), used = payoutChannelUsed(c.id,clock.date), remaining = Math.max(0,c.limit-used), banks = payoutBankNames(c.bankCodes);
+    var actions = (poHasPerm('payout_channels_edit') ? '<button class="btn btn-default btn-sm" onclick="openPayoutChannelForm(\''+c.id+'\')">编辑</button>' : '');   // 变更记录本期不展示，后续纳入操作日志
+    return '<tr><td class="asset-num">'+c.id+'</td><td>'+c.currency+'</td><td title="'+pcEscape(banks)+'" style="white-space:normal;line-height:1.7;padding-top:10px;padding-bottom:10px">'+pcEscape(banks)+'</td>'
+      +'<td class="asset-num">'+c.start+' – '+c.end+'</td><td class="asset-num">'+fmtInt(c.minAmt)+' – '+fmtInt(c.maxAmt)+'<div class="cell-sub'+(range?'':' warn')+'">'+(range?'有效：'+fmtInt(range.min)+' – '+fmtInt(range.max):'与平台范围无交集')+'</div></td>'
+      +'<td class="asset-num" style="padding-top:10px;padding-bottom:10px;line-height:1.8">上限 '+fmtInt(c.limit)+'<div class="cell-sub">已用 '+fmtInt(used)+'</div><div class="cell-sub'+(remaining===0?' warn':'')+'">剩余 '+fmtInt(remaining)+'</div></td>'
+      +'<td><span class="badge '+(c.enabled?'badge-green':'badge-gray')+'">'+(c.enabled?'已启用':'已禁用')+'</span><div class="cell-sub" style="margin-top:5px">'+payoutChannelCondition(c,clock,remaining)+'</div></td><td class="asset-num">'+pcEscape(c.updated)+'</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">'+actions+'</div></td></tr>';
+  }).join('') || '<tr><td colspan="9" style="text-align:center;color:#909399;height:100px">暂无符合条件的代付通道</td></tr>';
+  renderPager('pcPager',rows.length,pcPage,pcPageSize,'setPcPage','setPcPageSize'); renderIcons();
+}
+function searchPayoutChannels(){pcPage=1;renderPayoutChannels();}
+function resetPayoutChannelFilter(){['pcIdFilter','pcBankFilter','pcStatusFilter'].forEach(function(id){document.getElementById(id).value='';});searchPayoutChannels();}
+function setPcPage(p){pcPage=p;renderPayoutChannels();}
+function setPcPageSize(n){pcPageSize=n;pcPage=1;renderPayoutChannels();}
+function openPayoutChannelForm(id) {
+  if (!poHasPerm('payout_channels_edit')) {showToast('无代付配置编辑权限','error');return;}
+  var c = id ? payoutChannelFind(id) : {currency:'CNY',bankCodes:[],start:'09:00',end:'17:00',minAmt:1000,maxAmt:100000,limit:5000000,enabled:false};
+  if (!c) {showToast('通道不存在','error');return;}
+  editingPayoutChannelId = id || null; editingPayoutChannelVersion = c.version || null; pendingPayoutChannel=null;
+  document.getElementById('pcFormTitle').textContent=id?'编辑代付通道':'新增代付通道';
+  document.getElementById('pcFormIdRow').style.display=id?'flex':'none';document.getElementById('pcFormId').textContent=id||'';
+  Object.keys(PC_FORM_FIELDS).forEach(function(key){document.getElementById(key).value=c[PC_FORM_FIELDS[key]];cfSetErr(key,'');});
+  PAYOUT_BANKS.forEach(function(b){document.getElementById('pcBank'+b.code).checked=c.bankCodes.indexOf(b.code)!==-1;});
+  document.getElementById('pcfStatusOn').checked=c.enabled;document.getElementById('pcfStatusOff').checked=!c.enabled;
+  cfSetErr('pcfBanks','');cfSetErr('pcfStatus','');
+  document.getElementById('pcUsedHint').textContent=id?'今日已用 '+fmtInt(payoutChannelUsed(id,payoutChinaClock().date))+' CNY，编辑及启停不会释放。':'';
+  updatePayoutChannelPreview();openModal('payoutChannelModal');renderIcons();
+}
+function updatePayoutChannelPreview() {
+  ['pcfMin','pcfMax','pcfStart','pcfEnd','pcfStatus'].forEach(function(id){cfSetErr(id,'');});
+  var min = document.getElementById('pcfMin').value.trim(), max = document.getElementById('pcfMax').value.trim();
+  var range = pcPositiveInt(min) && pcPositiveInt(max) && Number(min)<=Number(max) ? payoutEffectiveRange({minAmt:Number(min),maxAmt:Number(max)}) : null;
+  document.getElementById('pcEffectiveHint').textContent='平台单笔范围 '+fmtInt(PAYOUT_PLATFORM_RANGE.min)+' – '+fmtInt(PAYOUT_PLATFORM_RANGE.max)+' CNY；'+(range?'本通道有效范围 '+fmtInt(range.min)+' – '+fmtInt(range.max)+' CNY（含边界）。':'当前无有效金额交集，不能启用。');
+  var start = pcMinutes(document.getElementById('pcfStart').value), end = pcMinutes(document.getElementById('pcfEnd').value);
+  document.getElementById('pcServiceHint').textContent=Number.isFinite(start)&&end>start ? (end-start<=60?'此时段不超过 60 分钟，没有可派新单时间。':'每日 '+String(Math.floor((end-60)/60)).padStart(2,'0')+':'+String((end-60)%60).padStart(2,'0')+' 起停止派新单，已派订单按原截止时间继续处理。'):'同日开始时间必须早于结束时间，不支持跨午夜。';
+}
+function pcPositiveInt(v){return /^\d+$/.test(String(v)) && Number.isSafeInteger(Number(v)) && Number(v)>0;}
+function payoutChannelErrors(v) {
+  var errors={};
+  if(v.currency!=='CNY')errors.pcfCurrency='本期仅支持 CNY';
+  if(!v.bankCodes.length || v.bankCodes.some(function(code){return !PAYOUT_BANKS.some(function(b){return b.code===code;});}))errors.pcfBanks='请至少选择一家支持的银行';
+  if(!Number.isFinite(pcMinutes(v.start)))errors.pcfStart='请选择有效的服务开始时间';
+  if(!Number.isFinite(pcMinutes(v.end)))errors.pcfEnd='请选择有效的服务结束时间';
+  else if(Number.isFinite(pcMinutes(v.start)) && pcMinutes(v.start)>=pcMinutes(v.end))errors.pcfEnd='结束时间须晚于开始时间，不支持跨午夜';
+  else if(Number.isFinite(pcMinutes(v.start)) && pcMinutes(v.end)-pcMinutes(v.start)<=60)errors.pcfEnd='服务时段须大于 60 分钟';   // 结束前 60 分钟停派，时段须留出可派单时间
+  if(!pcPositiveInt(v.minAmt))errors.pcfMin='请输入有效的单笔最小金额（正整数）';
+  if(!pcPositiveInt(v.maxAmt))errors.pcfMax='请输入有效的单笔最大金额（正整数）';
+  if(!errors.pcfMin&&!errors.pcfMax&&Number(v.minAmt)>Number(v.maxAmt))errors.pcfMin='最小金额不能大于最大金额';
+  var range = !errors.pcfMin&&!errors.pcfMax ? payoutEffectiveRange(v) : null;
+  if(!pcPositiveInt(v.limit))errors.pcfLimit='请输入有效的时段额度（正整数）';
+  else if(range&&Number(v.limit)<range.max)errors.pcfLimit='时段额度不能小于有效单笔最大额 '+fmtInt(range.max)+' CNY';
+  if(v.enabled&&!errors.pcfMin&&!errors.pcfMax&&!range)errors.pcfStatus='通道与平台金额范围无交集，不能启用；可先保存为禁用';
+  return errors;
+}
+function savePayoutChannel() {
+  if(!poHasPerm('payout_channels_edit')){showToast('无代付配置编辑权限','error');return;}
+  var v={};Object.keys(PC_FORM_FIELDS).forEach(function(id){v[PC_FORM_FIELDS[id]]=document.getElementById(id).value.trim();});
+  v.bankCodes=PAYOUT_BANKS.filter(function(b){return document.getElementById('pcBank'+b.code).checked;}).map(function(b){return b.code;});v.enabled=document.getElementById('pcfStatusOn').checked;
+  var errors=payoutChannelErrors(v);
+  Object.keys(PC_FORM_FIELDS).concat(['pcfBanks','pcfStatus']).forEach(function(id){cfSetErr(id,errors[id]||'');});
+  if(Object.keys(errors).length)return;
+  ['minAmt','maxAmt','limit'].forEach(function(key){v[key]=Number(v[key]);});
+  var old=editingPayoutChannelId?payoutChannelFind(editingPayoutChannelId):null;
+  if(editingPayoutChannelId&&(!old||old.version!==editingPayoutChannelVersion)){showToast('通道配置已变化，请重新打开编辑','error');return;}
+  if(old&&JSON.stringify(payoutChannelSnapshot(old))===JSON.stringify(payoutChannelSnapshot(v))){closeModal('payoutChannelModal');showToast('配置未变化');return;}
+  pendingPayoutChannel={id:editingPayoutChannelId,version:editingPayoutChannelVersion,value:v};
+  if(old&&old.enabled&&!v.enabled){askPayoutChannelDisable(old.id);return;}
+  commitPayoutChannel();
+}
+function togglePayoutChannel(id) {
+  if(!poHasPerm('payout_channels_edit')){showToast('无代付配置编辑权限','error');return;}
+  var c=payoutChannelFind(id);if(!c)return;
+  var v=payoutChannelSnapshot(c);v.enabled=!c.enabled;
+  var errors=payoutChannelErrors(v);
+  if(Object.keys(errors).length){showToast(errors[Object.keys(errors)[0]],'error');return;}
+  pendingPayoutChannel={id:id,version:c.version,value:v};
+  if(c.enabled)askPayoutChannelDisable(id);else commitPayoutChannel();
+}
+function askPayoutChannelDisable(id){document.getElementById('pcDisableText').textContent='确认禁用通道 '+id+'？禁用后停止派新单，已派订单继续处理，已用额度保持原归属。';openModal('payoutChannelDisableModal');renderIcons();}
+function cancelPayoutChannelDisable(){pendingPayoutChannel=null;closeModal('payoutChannelDisableModal');}
+function commitPayoutChannel() {
+  if(!poHasPerm('payout_channels_edit')){pendingPayoutChannel=null;closeModal('payoutChannelDisableModal');showToast('无代付配置编辑权限','error');return;}
+  var pending=pendingPayoutChannel;if(!pending)return;
+  var old=pending.id?payoutChannelFind(pending.id):null;
+  if(pending.id&&(!old||old.version!==pending.version)){pendingPayoutChannel=null;closeModal('payoutChannelDisableModal');showToast('通道配置已变化，请重新打开编辑','error');return;}
+  var errors=payoutChannelErrors(pending.value);if(Object.keys(errors).length){pendingPayoutChannel=null;closeModal('payoutChannelDisableModal');showToast(errors[Object.keys(errors)[0]],'error');return;}
+  var before=old?payoutChannelSnapshot(old):null, v=pending.value, time=nowStr(), id=old?old.id:'POC-'+String(payoutChannelSeq++).padStart(4,'0');
+  var onlyStatusChanged = old && JSON.stringify(before) === JSON.stringify(Object.assign(payoutChannelSnapshot(v),{enabled:before.enabled}));
+  var action = !old ? '新增' : onlyStatusChanged && before.enabled !== v.enabled ? (v.enabled ? '启用' : '禁用') : '编辑';
+  if(old)Object.assign(old,v,{updated:time,version:old.version+1});else PAYOUT_CHANNELS.unshift(Object.assign({id:id,updated:time,version:1},v));
+  PAYOUT_CHANNEL_HISTORY.unshift({channelId:id,time:time,action:action,before:before,after:payoutChannelSnapshot(v),operator:CUR_OP});
+  pendingPayoutChannel=null;pcPage=1;closeModal('payoutChannelModal');closeModal('payoutChannelDisableModal');renderPayoutChannels();
+  showToast(action==='禁用'?'代付通道已禁用，已派订单继续处理':action==='启用'?'代付通道已启用，仅对新单生效':'代付通道已保存，仅对新单生效');
+}
+function payoutChannelSummary(v){return v ? v.currency+'；'+payoutBankNames(v.bankCodes)+'；'+v.start+'–'+v.end+'（UTC+8）；单笔 '+fmtInt(v.minAmt)+'–'+fmtInt(v.maxAmt)+'；时段额度 '+fmtInt(v.limit)+' CNY；'+(v.enabled?'启用':'禁用') : '—';}
+function openPayoutChannelHistory(id) {
+  if(!payoutChannelFind(id))return;
+  document.getElementById('pcHistoryTitle').textContent=id+' · 通道变更记录';
+  document.getElementById('pcHistoryTbody').innerHTML=PAYOUT_CHANNEL_HISTORY.filter(function(h){return h.channelId===id;}).map(function(h){return '<tr><td class="asset-num">'+pcEscape(h.time)+'</td><td>'+h.action+'</td><td style="white-space:normal;line-height:1.8;padding:12px;overflow-wrap:anywhere">'+pcEscape(payoutChannelSummary(h.before))+'</td><td style="white-space:normal;line-height:1.8;padding:12px;overflow-wrap:anywhere">'+pcEscape(payoutChannelSummary(h.after))+'</td><td style="white-space:normal;overflow-wrap:anywhere">'+pcEscape(h.operator)+'</td></tr>';}).join('')||'<tr><td colspan="5" style="text-align:center;height:80px">暂无变更记录</td></tr>';
+  openModal('payoutChannelHistoryModal');renderIcons();
+}
+
+
+/* =========================================================================
+ * 4.4 · 代付订单：列表 / 详情 / 导出 / 接单 / 拒单 / 付款记录 / 付款异常 / 补充材料 / 补报付款
+ * 状态与动作按 PRD 3.5.1 迁移矩阵；服务端复核（状态、执行标记、截止时间、权限）由 poGuard + payoutTick 模拟。
+ * ========================================================================= */
+var PO_STATUS = {
+  pending_accept:{ label:'待接单', cls:'badge-blue' },
+  pending_payment:{ label:'待付款', cls:'badge-blue' },
+  pending_confirmation:{ label:'待确认到账', cls:'badge-orange' },
+  appealed:{ label:'申诉中', cls:'badge-red' },
+  completed:{ label:'成功', cls:'badge-green' },
+  failed:{ label:'失败', cls:'badge-gray' },
+  rejected:{ label:'已拒绝', cls:'badge-gray' }
+};
+/* 申诉来源：key 与 API appealSource 枚举一致 */
+var PO_APPEAL_SRC = { timeout:'付款超时', confirm_timeout:'商户确认超时', merchant:'商户异议', partner:'服务商付款异常', customer:'客户反馈' };
+var PO_FAIL = { platform_unfreeze:'平台裁定全额解冻' };
+/* 申诉记录发起方；本后台只展示本方（收款服务商）提交的材料，不展示平台备注 */
+var PO_PARTY = { merchant:'下单商户', partner:'收款服务商', customer:'客户', platform:'平台' };
+function poRejectText(o) { return o.failCode === 'accept_timeout' ? '接单超时（派单后 30 分钟内未接单）' : '服务商拒单：' + o.rejectReason; }
+var PO_CONFIRM = { merchant:'商户确认到账', ruling:'平台裁定足额到账' };
+var PO_BANK_STATUS = { succeeded:['转账成功','badge-green'], processing:['银行处理中','badge-orange'], returned:['已退回','badge-red'], failed:['转账失败','badge-red'] };
+var PO_REC_KIND = { normal:'付款记录', late:'补报付款' };
+var PO_FILE_EXT = ['jpg','jpeg','png','heic','webp','pdf'];
+
+function findPayoutOrder(id) { for (var i = 0; i < PAYOUT_ORDERS.length; i++) if (PAYOUT_ORDERS[i].id === id) return PAYOUT_ORDERS[i]; return null; }
+/* 代付操作权限独立于收款权限：按当前登录账号的 payout_orders_* 权限控制入口（服务端同样拒绝） */
+function poHasPerm(p) { var m = MEMBERS.filter(function(x){ return x.email === CUR_OP; })[0]; return !!m && m.perms.indexOf(p) !== -1; }   // 按当前操作人权限判断（代付订单 / 通道 / 汇率共用）
+function poCan(k) { return poHasPerm('payout_orders_' + k); }
+/* 代付菜单与页面：无查看权限隐藏对应子菜单，三项都无则隐藏「代付」一级菜单 */
+var PO_PAGE_PERM = { pagePayoutOrders:'payout_orders_view', pagePayoutChannels:'payout_channels_view', pagePayoutRates:'payout_rates_view' };
+function applyPayoutNavPerms() {
+  var any = false;
+  Object.keys(PO_PAGE_PERM).forEach(function(pg){
+    var ok = poHasPerm(PO_PAGE_PERM[pg]), el = document.querySelector('.nav-sub-item[data-page="' + pg + '"]');
+    if (el) el.style.display = ok ? '' : 'none';
+    any = any || ok;
+  });
+  document.getElementById('navPayout').style.display = any ? '' : 'none';
+  document.getElementById('navSubPayout').style.display = any ? '' : 'none';
+  var ov = poHasPerm('payout_orders_view');   // 首页 / 账户资金：无代付订单查看权限时隐藏「代付订单」区块与「代付待入账」
+  ['ovPayoutSection','ovPoPendingSep','ovPoPendingItem','balPoPendingSep','balPoPendingItem'].forEach(function(id){ document.getElementById(id).style.display = ov ? '' : 'none'; });
+}
+function poLog(o, text, op, time) { o.history.push({ time:time || Date.now(), text:text, op:op || '' }); }
+function poHasValidPayment(o) { return o.records.some(function(r){ return r.bankStatus === 'succeeded'; }); }   // 有效付款：至少一笔银行状态为「转账成功」的付款记录
+function poPaidTotal(o) { return round2(o.records.reduce(function(n, r){ return n + (r.bankStatus === 'succeeded' ? r.amount : 0); }, 0)); }
+function poCny(n) { return fmtUSDT(n) + ' CNY'; }
+function poEmpty() { return '<span class="cell-empty">—</span>'; }
+function poBankText(o) { return o.bankCode ? o.bank + '（' + o.bankCode + '）' : o.bank; }   // 开户银行：银行名称（银行编码），编码对应 API recipient.bankCode
+
+/* 模拟服务端按绝对截止时间迁移：接单截止（派单后 30 分钟）仍未接单 → 已拒绝（接单超时）；付款截止（接单后 30 分钟）仍未提交有效凭证 → 申诉中（付款超时）；商户确认截止到期 → 申诉中（商户确认超时）。返回是否有变化 */
+function payoutTick() {
+  var now = Date.now(), changed = false;
+  PAYOUT_ORDERS.forEach(function(o){
+    if (o.status === 'pending_accept' && now >= o.t0) {
+      o.status = 'rejected'; o.failCode = 'accept_timeout'; o.failedAt = o.t0;
+      poLog(o, '接单超时（派单后 30 分钟内未接单），订单已拒绝', '系统', o.t0);
+      changed = true;
+    } else if (o.status === 'pending_payment' && o.t1 && now >= o.t1) {
+      o.status = 'appealed';
+      o.appeal = { source:'timeout', reason:'接单后 30 分钟内未提交有效付款凭证', created:o.t1, items:[] };
+      poLog(o, '付款超时（接单后 30 分钟内未提交有效付款），订单转入申诉中，由平台核实', '系统', o.t1);
+      changed = true;
+    } else if (o.status === 'pending_confirmation' && o.t2 && now >= o.t2) {
+      o.status = 'appealed';
+      o.appeal = { source:'confirm_timeout', reason:'商户确认截止前未确认到账', created:o.t2, items:[] };
+      poLog(o, '商户确认超时（付款提交后 30 分钟内未确认），订单转入申诉中，由平台核实', '系统', o.t2);
+      changed = true;
+    }
+  });
+  return changed;
+}
+/* 当前截止时间：待接单看接单截止（派单后 30 分钟），待付款看付款截止（接单后 30 分钟），待确认到账看商户确认截止；申诉中无截止时间 */
+function poDeadline(o) {
+  if (o.status === 'pending_accept') return { label:'接单截止', ts:o.t0 };
+  if (o.status === 'pending_payment') return { label:'付款截止', ts:o.t1 };
+  if (o.status === 'pending_confirmation') return { label:'商户确认截止', ts:o.t2 };
+  return null;
+}
+function poRemainText(ts) {
+  var s = Math.floor((ts - Date.now()) / 1000);
+  if (s <= 0) return '<span style="color:#909399">已到期</span>';
+  var t = s >= 3600 ? Math.floor(s / 3600) + ' 小时 ' + pad2(Math.floor(s % 3600 / 60)) + ' 分' : fmtMMSS(s);
+  return s < 300 ? '<span style="color:#F56C6C;font-weight:600">剩余 ' + t + '</span>' : '剩余 ' + t;
+}
+function poCountdown(ts) { return '<span class="po-cd" data-ts="' + ts + '">' + poRemainText(ts) + '</span>'; }
+function poDeadlineCell(o) {
+  var d = poDeadline(o);
+  if (!d) return poEmpty();
+  return '<div>' + fmtDateTime(d.ts) + '</div><div class="cell-sub">' + poCountdown(d.ts) + '</div>';
+}
+function poStatusHtml(o) {
+  var s = PO_STATUS[o.status];
+  return '<span class="badge ' + s.cls + '">' + s.label + '</span>';   // 状态下方不再展示说明文字；失败原因 / 确认来源见详情
+}
+function poYTag(o) { return o.status === 'completed' ? '已入账' : o.status === 'failed' || o.status === 'rejected' ? '不入账' : '成功后入账'; }
+
+/* 动作：主操作（列表 + 详情）与次要操作（仅详情），均按状态、执行标记和权限显示 */
+function poActions(o) {
+  var a = [];
+  if (o.status === 'pending_accept') { a.push(['btn-primary','askStartPayout','接单','start']); a.push(['btn-default','openPayoutReject','拒单','reject']); }
+  if (o.status === 'pending_payment') a.push(['btn-primary','openPayoutPayment','付款','payment']);
+  if (o.status === 'appealed') {
+    a.push(['btn-primary','openPayoutEvidence','补充材料','evidence']);   // 申诉中随时可补充，无截止时间：说明 / 附件至少一项
+    a.push(['btn-default','openPayoutLatePayment','补报付款','payment']);   // 申诉中补报已经发生的转账，沿用付款权限；不得新增转账
+  }
+  return a.filter(function(x){ return poCan(x[3]); });
+}
+function poMoreActions(o) {
+  var a = [];
+  if (['pending_payment','pending_confirmation'].indexOf(o.status) !== -1) a.push(['btn-default','openPayoutException','付款异常','exception']);
+  return a.filter(function(x){ return poCan(x[3]); });
+}
+function poOpsCell(o) {
+  var b = function(a){ return '<button class="btn ' + a[0] + ' btn-sm" onclick="' + a[1] + '(\'' + o.id + '\')">' + a[2] + '</button>'; };
+  return '<div class="action-cell"><button class="btn btn-link btn-sm" onclick="openPayoutOrderDetail(\'' + o.id + '\')">详情</button>' + poActions(o).map(b).join('') + '</div>';
+}
+
+/* ── 列表 / 筛选 / 分页 / 导出 ── */
+var poPage = 1, poPageSize = 10, poFilter = {};
+var PO_FILTER_IDS = { id:'poIdFilter', payee:'poPayeeFilter', account:'poAccountFilter', status:'poStatusFilter', creFrom:'poCreFrom', creTo:'poCreTo' };
+function filteredPayoutOrders() {
+  var f = poFilter;
+  return PAYOUT_ORDERS.filter(function(o){
+    return (!f.id || o.id.indexOf(f.id) !== -1) && (!f.payee || o.payee.indexOf(f.payee) !== -1) &&
+      (!f.account || o.accountNo.indexOf(f.account.replace(/\s/g, '')) !== -1) && (!f.status || o.status === f.status) &&
+      inDateRange(fmtDateTime(o.created), f.creFrom, f.creTo);
+  }).sort(function(a, b){ return b.created - a.created; });
+}
+function renderPayoutOrders() {
+  payoutTick();
+  var tbody = document.getElementById('poTbody'), rows = filteredPayoutOrders();
+  poPage = clampPage(poPage, rows.length, poPageSize);
+  tbody.innerHTML = pageSlice(rows, poPage, poPageSize).map(function(o){
+    return '<tr>' +
+      '<td><div class="copy-cell"><span>' + o.id + '</span><span class="copy-icon" onclick="copyText(\'' + o.id + '\')"><i data-lucide="copy"></i></span></div></td>' +
+      '<td class="asset-num">' + poCny(o.cny) + '</td>' +
+      '<td><div>' + o.payee + '</div><div class="cell-sub">' + poBankText(o) + ' · ' + o.accountNo + '</div></td>' +
+      '<td class="asset-num">1 USDT = ' + o.rc + ' CNY</td>' +
+      '<td class="asset-num"><div>' + fmtUSDT(o.y) + ' USDT</div><div class="cell-sub">' + poYTag(o) + '</div></td>' +
+      '<td>' + poStatusHtml(o) + '</td>' +
+      '<td class="asset-num">' + poDeadlineCell(o) + '</td>' +
+      '<td class="asset-num">' + fmtDateTime(o.created) + '</td>' +
+      '<td>' + poOpsCell(o) + '</td></tr>';
+  }).join('') || '<tr><td colspan="10" style="text-align:center;color:#C0C4CC;height:80px">暂无数据</td></tr>';
+  document.getElementById('poCount').textContent = rows.length;
+  document.getElementById('poExportBtn').style.display = poCan('export') ? '' : 'none';
+  renderPager('poPager', rows.length, poPage, poPageSize, 'setPoPage', 'setPoPageSize');
+  renderIcons();
+}
+function searchPayoutOrders() {
+  var f = {};
+  Object.keys(PO_FILTER_IDS).forEach(function(k){ f[k] = document.getElementById(PO_FILTER_IDS[k]).value.trim(); });
+  if (f.creFrom && f.creTo && f.creFrom > f.creTo) { showToast('开始日期不能晚于结束日期', 'error'); return; }   // 不查询，保留上次生效的筛选
+  poFilter = f;
+  poPage = 1;
+  renderPayoutOrders();
+}
+function resetPayoutOrderFilter() {
+  Object.keys(PO_FILTER_IDS).forEach(function(k){ document.getElementById(PO_FILTER_IDS[k]).value = ''; });
+  searchPayoutOrders();
+}
+function setPoPage(p) { poPage = p; renderPayoutOrders(); }
+function setPoPageSize(size) { poPageSize = size; poPage = 1; renderPayoutOrders(); }
+/* 导出：按已点「查询」生效的筛选条件（poFilter 快照）导出全部结果（不限当前页），不重新读取输入框；不含操作列；字段边界同页面，不含 Rm / 加点 / 商户信息 */
+function exportPayoutOrders() {
+  if (!poCan('export')) { showToast('无导出权限', 'error'); return; }
+  if (payoutTick()) refreshPayoutViews();
+  var rows = filteredPayoutOrders();
+  if (!rows.length) { showToast('没有符合筛选条件的订单', 'error'); return; }
+  var t = function(ts){ return ts ? fmtDateTime(ts) : ''; };
+  var headers = ['订单号','订单金额(CNY)','收款人','开户银行（编码）','收款账号','代付汇率','入账金额(USDT)','入账状态','状态','当前截止时间','创建时间'];   // 与列表字段一致，不含操作列
+  var lines = [headers].concat(rows.map(function(o){
+    var dl = poDeadline(o);
+    return [o.id, o.cny, o.payee, poBankText(o), o.accountNo, '1 USDT = ' + o.rc + ' CNY', fmtUSDT(o.y), poYTag(o), PO_STATUS[o.status].label, dl ? t(dl.ts) : '', t(o.created)];
+  })).map(function(row){ return row.map(csvCell).join(','); }).join('\r\n');
+  var url = URL.createObjectURL(new Blob(['﻿', lines], { type:'text/csv;charset=utf-8' }));
+  var link = document.createElement('a');
+  link.href = url; link.download = '代付订单_' + nowStr().replace(/[-: ]/g, '') + '.csv'; link.style.display = 'none';
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  showToast('已导出 ' + rows.length + ' 笔订单');
+}
+
+/* ── 详情 ── */
+var poDetailId = null;
+function poRow(label, value, style) { return '<div class="drawer-meta-row"><span class="drawer-meta-label">' + label + '</span><span class="drawer-meta-value"' + (style ? ' style="' + style + '"' : '') + '>' + value + '</span></div>'; }
+function poSec(title, html) { return '<div class="od-section"><div class="od-section-title">' + title + '</div>' + html + '</div>'; }
+function poCopy(v) { return '<span class="copy-cell" style="display:inline-flex"><span>' + v + '</span><span class="copy-icon" onclick="copyText(\'' + v + '\')"><i data-lucide="copy"></i></span></span>'; }
+function poFilesHtml(o, files, path) {
+  return '<div class="po-file-list">' + files.map(function(f, j){
+    return '<div class="attach-item" style="padding:6px 10px"><span class="attach-icon" style="width:24px;height:24px"><i data-lucide="' + (fileExt(f.name) === 'pdf' ? 'file-text' : 'file-image') + '" style="width:14px;height:14px"></i></span>' +
+      '<div class="attach-info"><div class="attach-name">' + pcEscape(f.name) + '</div></div><span class="attach-meta" style="margin:0">' + fmtFileSize(f.size) + '</span>' +
+      '<div class="attach-actions"><a onclick="previewPoFile(\'' + o.id + '\',\'' + path + '\',' + j + ')">预览</a><a onclick="downloadPoFile(\'' + o.id + '\',\'' + path + '\',' + j + ')">下载</a></div></div>';
+  }).join('') + '</div>';
+}
+function poRecordsHtml(o) {
+  if (!o.records.length) return '<div class="po-sub-title">暂无付款记录</div>';
+  return o.records.map(function(r, i){
+    var st = PO_BANK_STATUS[r.bankStatus];
+    return '<div class="po-rec"><div class="drawer-meta">' +
+      poRow(PO_REC_KIND[r.kind], '<span class="badge ' + st[1] + '">' + st[0] + '</span>') +
+      poRow('实际付款金额', poCny(r.amount), r.amount !== o.cny ? 'color:#F56C6C' : '') +
+      poRow('付款时间', fmtDateTime(r.paidAt)) + poRow('付款账户名', pcEscape(r.payerName)) + poRow('付款卡号', pcEscape(r.payerCardNo)) + poRow('付款银行', pcEscape(r.payerBankCode ? r.payerBank + '（' + r.payerBankCode + '）' : r.payerBank)) + poRow('银行流水号', poCopy(pcEscape(r.serial))) +
+      (r.note ? poRow('情况说明', pcEscape(r.note)) : '') + poRow('提交人 / 时间', r.by + ' · ' + fmtDateTime(r.at)) +
+      '</div>' + poFilesHtml(o, r.files, 'r' + i) + '</div>';
+  }).join('') + '<div class="po-total"><span>成功付款合计</span><span class="asset-num">' + poCny(poPaidTotal(o)) + ' / 订单金额 ' + poCny(o.cny) + '</span></div>';
+}
+function poAppealHtml(o) {
+  var ap = o.appeal, html = '<div class="drawer-meta">' + poRow('申诉来源', PO_APPEAL_SRC[ap.source]) + poRow('申诉原因', pcEscape(ap.reason)) + poRow('申诉时间', fmtDateTime(ap.created)) + '</div>';
+  if (ap.note) html += '<div class="od-text">异常说明：' + pcEscape(ap.note) + '</div>';
+  /* 申诉记录：本后台仅展示本服务商提交的材料，不展示平台备注 */
+  var logs = ap.items.map(function(it, i){ return { it:it, i:i }; }).filter(function(x){ return x.it.party === 'partner'; })
+    .sort(function(a, b){ return a.it.time - b.it.time; });
+  html += '<div class="od-section-title" style="font-weight:400;font-size:12px;color:#909399">申诉记录</div>';
+  if (!logs.length) html += '<div class="po-sub-title">暂无记录</div>';
+  logs.forEach(function(x){
+    var it = x.it;
+    html += '<div class="po-log-head"><span class="badge badge-gray">' + PO_PARTY[it.party] + '</span><span>' + fmtDateTime(it.time) + ' · ' + it.by + '</span></div>' +
+      (it.note ? '<div class="od-text">' + pcEscape(it.note) + '</div>' : '') + (it.files && it.files.length ? poFilesHtml(o, it.files, 'a' + x.i) : '');
+  });
+  return html;
+}
+function poBanner(o) {
+  var box = function(cls, icon, text){ return '<div class="alert-box ' + cls + '"><i data-lucide="' + icon + '" class="alert-icon" style="width:15px;height:15px"></i><span>' + text + '</span></div>'; };
+  if (o.status === 'pending_accept') return box('alert-info', 'info', '请先「接单」，再到银行线下转账；未接单不得转账。接单截止 ' + fmtDateTime(o.t0) + ' 前未接单将自动拒绝；接单后需在 30 分钟内完成付款。');
+  if (o.status === 'pending_payment') return box('alert-warning', 'alert-triangle', '已接单，请在付款截止 ' + fmtDateTime(o.t1) + ' 前完成转账并点击「付款」提交付款信息。已接单不能拒单，金额不符或银行处理中请如实提交或发起付款异常。');
+  if (o.status === 'pending_confirmation') return box('alert-info', 'info', '已提交付款，等待商户确认到账；如发现付款异常可发起付款异常。');
+  if (o.status === 'appealed') return box('alert-danger', 'alert-octagon', '订单申诉中，由平台核实处理。如有补充说明或材料，可随时「补充材料」。');
+  if (o.status === 'rejected') return box('alert-danger', 'ban', '订单已拒绝，请勿继续付款。');
+  if (o.status === 'failed') return box('alert-danger', 'ban', '订单已失败，禁止对该订单执行付款。');
+  return '';
+}
+function openPayoutOrderDetail(id) {
+  payoutTick();
+  var o = findPayoutOrder(id), keepScroll = poDetailId === id;
+  var body = document.getElementById('payoutOrderDetailBody'), top = keepScroll ? body.scrollTop : 0;
+  poDetailId = id;
+  var html = poBanner(o);
+  html += poSec('订单信息', '<div class="drawer-meta">' +
+    poRow('订单号', poCopy(o.id)) + poRow('状态', poStatusHtml(o).replace(/<div class="cell-sub"/g, '<span class="cell-sub" style="margin-left:6px"').replace(/<\/div>/g, '</span>')) +
+    (o.startedAt ? poRow('接单时间', fmtDateTime(o.startedAt) + '<span class="cell-sub" style="margin-left:6px">' + o.startedBy + '</span>') : '') +
+    poRow('订单金额', poCny(o.cny)) + poRow('代付汇率', '1 USDT = ' + o.rc + ' CNY') +
+    poRow('入账金额', fmtUSDT(o.y) + ' USDT（' + poYTag(o) + '）', o.status === 'completed' ? 'color:#67C23A' : '') +
+    poRow('创建时间', fmtDateTime(o.created)) +
+    poRow('接单截止时间（派单后 30 分钟）', fmtDateTime(o.t0) + (o.status === 'pending_accept' ? '<span class="cell-sub" style="margin-left:6px">' + poCountdown(o.t0) + '</span>' : '')) +
+    poRow('付款截止时间（接单后 30 分钟）', o.t1 ? fmtDateTime(o.t1) + (o.status === 'pending_payment' ? '<span class="cell-sub" style="margin-left:6px">' + poCountdown(o.t1) + '</span>' : '') : poEmpty()) +
+    (o.t2 ? poRow('商户确认截止', fmtDateTime(o.t2) + (o.status === 'pending_confirmation' ? '<span class="cell-sub" style="margin-left:6px">' + poCountdown(o.t2) + '</span>' : '')) : '') +
+    (o.status === 'completed' ? poRow('完成时间', fmtDateTime(o.completedAt)) + poRow('确认来源', PO_CONFIRM[o.confirmSource]) : '') +
+    (o.status === 'failed' ? poRow('失败时间', fmtDateTime(o.failedAt)) + poRow('失败原因', PO_FAIL[o.failCode]) : '') +
+    (o.status === 'rejected' ? poRow('拒绝时间', fmtDateTime(o.failedAt)) + poRow('拒绝原因', pcEscape(poRejectText(o))) : '') + '</div>');
+  html += poSec('收款人', '<div class="drawer-meta">' +
+    poRow('收款人姓名', o.payee) + poRow('证件类型', o.idType) + poRow('证件号码', o.idNo) + poRow('收款户名', o.accountName) +
+    poRow('收款账号', poCopy(o.accountNo)) + poRow('开户银行', poBankText(o)) + '</div>');
+  html += poSec('代付通道', '<div class="drawer-meta">' + poRow('通道编号', o.channel.id) + poRow('归属时段', o.channel.date + ' ' + o.channel.period + '（UTC+8）') + '</div>');
+  html += poSec('付款记录', poRecordsHtml(o));
+  if (o.appeal) html += poSec('申诉信息', poAppealHtml(o));
+  var tl = o.history.slice().sort(function(a, b){ return a.time - b.time; });
+  html += poSec('处理记录', '<div class="od-timeline">' + tl.map(function(t){ return '<div class="od-tl-item"><div class="od-tl-time">' + fmtDateTime(t.time) + '</div><div class="od-tl-text">' + t.text + '</div>' + (t.op ? '<div class="od-tl-op">操作方：' + t.op + '</div>' : '') + '</div>'; }).join('') + '</div>');
+  html += poDemoHtml(o);
+  body.innerHTML = html;
+  body.scrollTop = top;
+  var acts = poMoreActions(o).concat(poActions(o).slice().reverse()), footer = document.getElementById('payoutOrderDetailFooter');
+  footer.style.display = acts.length ? 'flex' : 'none';
+  footer.innerHTML = acts.map(function(a){ return '<button class="btn ' + a[0] + '" onclick="' + a[1] + '(\'' + id + '\')">' + a[2] + '</button>'; }).join('');
+  document.getElementById('payoutOrderDetailMask').classList.add('show');
+  document.getElementById('payoutOrderDetail').classList.add('show');
+  renderIcons();
+}
+function closePayoutOrderDetail() {
+  poDetailId = null;
+  document.getElementById('payoutOrderDetailMask').classList.remove('show');
+  document.getElementById('payoutOrderDetail').classList.remove('show');
+}
+function renderOverviewPayout() {   // 首页 · 代付订单：需服务商处理的数量
+  var n = function(st){ return PAYOUT_ORDERS.filter(function(o){ return o.status === st; }).length + '<span>笔</span>'; };
+  document.getElementById('ovPoAccept').innerHTML = n('pending_accept');
+  document.getElementById('ovPoPay').innerHTML = n('pending_payment');
+  document.getElementById('ovPoAppeal').innerHTML = n('appealed');
+}
+function goPayoutOrders(status) {   // 首页卡片跳转：带上状态筛选
+  goPage('pagePayoutOrders');
+  resetPayoutOrderFilter();
+  document.getElementById('poStatusFilter').value = status;
+  searchPayoutOrders();
+}
+function renderPayoutPending() {   // 代付待入账：进行中代付订单（已接单未结束）的入账金额合计，仅提示，不计入总余额
+  var sum = round2(PAYOUT_ORDERS.filter(function(o){ return ['pending_payment','pending_confirmation','appealed'].indexOf(o.status) !== -1; }).reduce(function(n, o){ return n + o.y; }, 0));
+  ['ov','bal'].forEach(function(k){ document.getElementById(k + 'PoPending').innerHTML = fmtUSDT(sum) + '<span class="stat-unit">USDT</span>'; });
+}
+function refreshPayoutViews() {
+  renderPayoutOrders();
+  renderPayoutPending();
+  renderOverviewPayout();
+  if (poDetailId) openPayoutOrderDetail(poDetailId);
+}
+/* 附件预览 / 下载：本地上传的文件直接读取，演示数据按格式生成占位图 / PDF */
+function poFile(o, path, j) { var i = +path.slice(1); return (path[0] === 'r' ? o.records[i].files : o.appeal.items[i].files)[j]; }
+function poFileUrl(o, f) {
+  if (f.file) return f.url || (f.url = URL.createObjectURL(f.file));
+  if (fileExt(f.name) === 'pdf') return f.url || (f.url = makeEvidencePdf(f));
+  var cv = document.createElement('canvas'), W = 640, H = 360; cv.width = W * 2; cv.height = H * 2;
+  var g = cv.getContext('2d'); g.scale(2, 2);
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#303133'; g.font = '600 20px "Noto Sans SC", sans-serif'; g.fillText('银行付款回单（演示）', 32, 48);
+  g.fillStyle = '#909399'; g.font = '13px "Noto Sans SC", sans-serif'; g.fillText(f.name, 32, 74);
+  [['收款户名', o.accountName], ['收款账号', o.accountNo], ['开户银行', poBankText(o)], ['交易金额', fmtCNY(o.cny)]].forEach(function(r, i){
+    g.fillStyle = '#909399'; g.font = '13px "Noto Sans SC", sans-serif'; g.fillText(r[0], 32, 124 + i * 50);
+    g.fillStyle = '#303133'; g.font = '15px "Noto Sans SC", sans-serif'; g.fillText(r[1], 160, 124 + i * 50);
+    g.strokeStyle = '#EBEEF5'; g.beginPath(); g.moveTo(32, 138 + i * 50); g.lineTo(W - 32, 138 + i * 50); g.stroke();
+  });
+  return cv.toDataURL(fileExt(f.name) === 'png' ? 'image/png' : 'image/jpeg', 0.92);
+}
+function previewPoFile(id, path, j) {
+  var o = findPayoutOrder(id), f = poFile(o, path, j);
+  var pk = fileExt(f.name) === 'pdf' ? 'pdf' : (fileExt(f.name) === 'heic' ? 'none' : 'img');   // HEIC 浏览器无法直接显示，提示下载后查看
+  showPreview(f.name, pk, pk === 'none' ? '' : poFileUrl(o, f));
+  document.getElementById('proofPreviewDl').onclick = function(){ downloadPoFile(id, path, j); };
+  openModal('proofPreviewModal');
+  renderIcons();
+}
+function downloadPoFile(id, path, j) {
+  var o = findPayoutOrder(id), f = poFile(o, path, j), a = document.createElement('a');
+  a.href = poFileUrl(o, f); a.download = f.name;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ── 服务端复核模拟：先按截止时间迁移，再校验状态 / 执行标记；不满足则提示刷新 ── */
+function poGuard(o, statuses, exec) {
+  if (payoutTick()) refreshPayoutViews();
+  if (statuses.indexOf(o.status) === -1 || (exec && o.executionStatus !== exec)) {
+    showToast(o.status === 'appealed' && o.appeal.source === 'timeout' && statuses.indexOf('pending_payment') !== -1 ? '已超过付款截止时间，订单已转平台核实' : o.status === 'rejected' && o.failCode === 'accept_timeout' ? '订单已因接单超时（派单后 30 分钟内未接单）自动拒绝' : '订单状态已变化（当前：' + PO_STATUS[o.status].label + '），已为你刷新', 'error');
+    refreshPayoutViews();
+    return false;
+  }
+  return true;
+}
+function poMetaHtml(o) { return poRow('订单号', o.id) + poRow('订单金额', poCny(o.cny)) + poRow('收款人', o.payee) + poRow('收款账号', o.accountNo) + poRow('开户银行', poBankText(o)); }
+var poCurId = null;
+
+/* 接单：二次确认后转待付款，记录人 / 时间；与拒单互斥，重复点击幂等 */
+function askStartPayout(id) {
+  var o = findPayoutOrder(id);
+  if (!poGuard(o, ['pending_accept'])) return;
+  poCurId = id;
+  document.getElementById('poStartMeta').innerHTML = poMetaHtml(o);
+  document.getElementById('poStartText').innerHTML = '确认接单后，请在 <b>' + PO_T1_MIN + ' 分钟</b>内完成转账付款，付款逾期将由平台处理。';
+  document.getElementById('poStartBtn').disabled = false;
+  openModal('poStartModal');
+  renderIcons();
+}
+function commitStartPayout() {
+  var o = findPayoutOrder(poCurId), btn = document.getElementById('poStartBtn');
+  if (btn.disabled) return;
+  if (!poGuard(o, ['pending_accept'])) { closeModal('poStartModal'); return; }
+  btn.disabled = true;
+  o.status = 'pending_payment'; o.executionStatus = 'executing'; o.startedAt = Date.now(); o.startedBy = CUR_OP;
+  o.t1 = o.startedAt + PO_T1_MIN * 60000;   // 付款截止在接单时生成：接单时间 + 30 分钟
+  poLog(o, '已接单，等待付款', CUR_OP);
+  closeModal('poStartModal');
+  refreshPayoutViews();
+  showToast('请在 30 分钟内完成转账付款，完成后点击「付款」提交付款信息。');
+}
+
+/* 未执行拒单：选原因 + 声明未转账；订单失败、商户冻结与原时段额度释放 */
+function openPayoutReject(id) {
+  var o = findPayoutOrder(id);
+  if (!poGuard(o, ['pending_accept'])) return;
+  poCurId = id;
+  document.getElementById('poRejectMeta').innerHTML = poMetaHtml(o);
+  ['poRejectReason','poRejectNote'].forEach(function(k){ document.getElementById(k).value = ''; cfSetErr(k, ''); });
+  document.getElementById('poRejectAck').checked = false; cfSetErr('poRejectAck', '');
+  document.getElementById('poRejectNoteWrap').style.display = 'none';
+  updateTextCount(document.getElementById('poRejectNote'));
+  openModal('poRejectModal');
+  renderIcons();
+}
+function submitPayoutReject() {
+  var reason = document.getElementById('poRejectReason').value, note = document.getElementById('poRejectNote').value.trim(), ok = true;
+  if (!reason) { cfSetErr('poRejectReason', '请选择拒单原因'); ok = false; }
+  if (reason === '其他' && !note) { cfSetErr('poRejectNote', '请输入原因说明'); ok = false; }
+  if (!document.getElementById('poRejectAck').checked) { cfSetErr('poRejectAck', '请确认本订单未发生任何转账'); ok = false; }
+  if (!ok) return;
+  var o = findPayoutOrder(poCurId);
+  if (!poGuard(o, ['pending_accept'])) { closeModal('poRejectModal'); return; }
+  o.status = 'rejected'; o.failCode = 'partner_rejected'; o.failedAt = Date.now(); o.rejectReason = reason === '其他' ? '其他（' + note + '）' : reason;   // 选「其他」时保存为「其他（说明）」
+  poLog(o, '拒单（' + pcEscape(reason === '其他' ? '其他：' + note : reason) + '），订单已拒绝', CUR_OP);
+  closeModal('poRejectModal');
+  refreshPayoutViews();
+  showToast('已拒单');
+}
+
+/* 附件（付款凭证 / 付款异常银行材料 / 补充材料 / 补报付款）：JPG / JPEG / PNG / HEIC / WEBP / PDF，单个 ≤10MB，每次最多 5 个；失败原因显示在字段旁 */
+var poFiles = { pay:[], exc:[], evid:[] };
+var PO_FILE_LIST = { pay:'poPayFileList', exc:'poExcFileList', evid:'poEvidFileList' }, PO_FILE_ERR = { pay:'poPayFileErr', exc:'poExcFileErr', evid:'poEvidFileErr' };
+function poFileErr(k, msg) { var el = PO_FILE_ERR[k] && document.getElementById(PO_FILE_ERR[k]); if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; } else if (msg) showToast(msg, 'error'); }
+function onPoFilesChange(input, k) {
+  var errs = [];
+  Array.prototype.forEach.call(input.files, function(f){
+    if (PO_FILE_EXT.indexOf(fileExt(f.name)) === -1 || f.size > 10 * 1024 * 1024) { errs.push('仅支持 JPG、JPEG、PNG、HEIC、WEBP、PDF，且每个文件不能超过 10MB'); return; }
+    if (poFiles[k].length >= 5) { errs.push('最多上传 5 个文件'); return; }
+    poFiles[k].push({ name:f.name, size:f.size, file:f });
+  });
+  input.value = '';
+  poFileErr(k, errs.filter(function(e, i){ return errs.indexOf(e) === i; }).join('；'));
+  renderPoFiles(k);
+}
+function removePoFile(k, i) { poFiles[k].splice(i, 1); renderPoFiles(k); }
+function renderPoFiles(k) {
+  document.getElementById(PO_FILE_LIST[k]).innerHTML = poFiles[k].map(function(f, i){
+    return '<div class="attach-item" style="padding:6px 10px"><span class="attach-icon" style="width:24px;height:24px"><i data-lucide="' + (fileExt(f.name) === 'pdf' ? 'file-text' : 'file-image') + '" style="width:14px;height:14px"></i></span>' +
+      '<div class="attach-info"><div class="attach-name">' + pcEscape(f.name) + '</div></div><span class="attach-meta" style="margin:0">' + fmtFileSize(f.size) + '</span>' +
+      '<div class="attach-actions"><a style="color:#909399" onclick="removePoFile(\'' + k + '\',' + i + ')">删除</a></div></div>';
+  }).join('');
+  renderIcons();
+}
+function poResetForm(ids, k) {
+  ids.forEach(function(id){ var el = document.getElementById(id); el.value = ''; cfSetErr(id, ''); if (el.tagName === 'TEXTAREA') updateTextCount(el); });
+  poFiles[k] = []; poFileErr(k, ''); renderPoFiles(k);
+}
+
+/* 付款记录：
+ * normal  待付款·执行中：一笔足额且银行转账成功 → 待确认到账（启动商户确认计时）；金额不符 / 处理中 / 退回 / 失败也如实保存，转申诉中（付款异常）
+ * late    申诉中补报已发生的付款（如付款超时后补报），保持申诉中、不启动商户确认计时
+ */
+var poPayMode = 'normal';
+var PO_PAY_FIELDS = ['poPayAmount','poPayTime','poPayAccName','poPayCardNo','poPayBank','poPaySerial','poPayBankStatus','poPayNote'];
+function poLocalInput(ts) { var d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()); }
+function openPayoutPayment(id) {
+  var o = findPayoutOrder(id);
+  if (!poGuard(o, ['pending_payment'], 'executing')) return;
+  poCurId = id;
+  poResetForm(PO_PAY_FIELDS, 'pay');
+  document.getElementById('poPayTime').value = poLocalInput(Date.now());
+  document.getElementById('poPayMeta').innerHTML = poMetaHtml(o);
+  poPayMode = 'normal';   // 补报（late）：申诉中「补报付款」入口直接打开；或正常付款提交时发现已过付款截止后自动切换
+  applyPoPayMode();
+  openModal('poPayModal');
+  renderIcons();
+}
+/* 补报付款：申诉中补报已经发生的转账（不得新增转账）；提交后订单保持申诉中，不生成商户确认截止，由平台核实裁定 */
+function openPayoutLatePayment(id) {
+  var o = findPayoutOrder(id);
+  if (!poGuard(o, ['appealed'])) return;
+  poCurId = id;
+  poResetForm(PO_PAY_FIELDS, 'pay');
+  document.getElementById('poPayTime').value = poLocalInput(Date.now());
+  document.getElementById('poPayMeta').innerHTML = poMetaHtml(o);
+  poPayMode = 'late';
+  applyPoPayMode();
+  openModal('poPayModal');
+  renderIcons();
+}
+function applyPoPayMode(extra) {
+  var o = findPayoutOrder(poCurId);
+  var title = { normal:'付款', late:'补报付款' }[poPayMode];
+  var text = {
+    normal:'请如实填写实际银行转账信息。',
+    late:'仅可补报已经发生的转账，不得新增转账；提交后订单仍在申诉中，由平台核实裁定。'
+  }[poPayMode];
+  document.getElementById('poPayTitle').textContent = title;
+  var alert = document.getElementById('poPayAlert');
+  alert.className = 'alert-box ' + (extra ? 'alert-warning' : 'alert-info');
+  document.getElementById('poPayAlertText').innerHTML = (extra ? extra + '<br>' : '') + text;
+  document.getElementById('poPayAmountHint').textContent = '';
+  document.getElementById('poPayNoteReq').style.display = poPayMode === 'late' ? 'inline' : 'none';
+  updatePoPayOutcome();
+}
+function poPayIsNormalOk(o) { return +document.getElementById('poPayAmount').value === o.cny && document.getElementById('poPayBankStatus').value === 'succeeded'; }
+function updatePoPayOutcome() {
+  var o = findPayoutOrder(poCurId), box = document.getElementById('poPayOutcome'), amt = document.getElementById('poPayAmount').value, st = document.getElementById('poPayBankStatus').value;
+  var amtHint = document.getElementById('poPayAmountHint');   // 正常付款：金额与订单金额不一致时，输入框下方红字提示
+  if (poPayMode === 'normal') {
+    var mismatch = amt !== '' && +amt !== o.cny;
+    amtHint.textContent = mismatch ? '实际付款金额与订单金额不一致，提交后将进入申诉，由平台处理。' : '';
+    amtHint.style.color = '#F56C6C';
+  } else amtHint.style.color = '';
+  if (poPayMode !== 'normal' || !amt || !st) { box.style.display = 'none'; document.getElementById('poPayNoteReq').style.display = poPayMode === 'late' ? 'inline' : 'none'; return; }
+  var ok = poPayIsNormalOk(o);
+  box.style.display = 'flex';
+  box.className = 'alert-box ' + (ok ? 'alert-info' : 'alert-warning');
+  document.getElementById('poPayOutcomeText').textContent = ok ? '提交后订单进入「待确认到账」，开始商户确认计时（30 分钟）。' : '金额与订单不符或银行未显示转账成功：将保存本条实际付款记录，订单转入「申诉中（服务商付款异常）」由平台核实，请填写情况说明。';
+  document.getElementById('poPayNoteReq').style.display = ok ? 'none' : 'inline';
+}
+function poSerialKey(cardNo, serial) { return String(cardNo).replace(/\s/g, '') + '|' + String(serial).trim().toUpperCase(); }   // 完整付款卡号（去空格）＋银行流水号（转大写）
+function poFindSerial(account, serial) {   // 以服务商＋付款卡号＋银行流水号识别重复记录（跨订单）
+  var key = poSerialKey(account, serial), hit = null;
+  PAYOUT_ORDERS.forEach(function(o){ o.records.forEach(function(r){ if (poSerialKey(r.payerCardNo, r.serial) === key) hit = o; }); });
+  return hit;
+}
+function submitPayoutPayment() {
+  var o = findPayoutOrder(poCurId), v = {}, ok = true;
+  PO_PAY_FIELDS.forEach(function(k){ v[k] = document.getElementById(k).value.trim(); cfSetErr(k, ''); });
+  var amt = +v.poPayAmount;
+  if (!v.poPayAmount || !(amt > 0)) { cfSetErr('poPayAmount', '请输入实际付款金额'); ok = false; }
+  if (!v.poPayTime) { cfSetErr('poPayTime', '请选择付款时间'); ok = false; }
+  else if (new Date(v.poPayTime).getTime() > Date.now()) { cfSetErr('poPayTime', '付款时间不能晚于当前时间'); ok = false; }
+  else if (o.startedAt && new Date(v.poPayTime).getTime() < Math.floor(o.startedAt / 1000) * 1000) { cfSetErr('poPayTime', '付款时间不能早于接单时间'); ok = false; }   // 不早于接单时间（startedAt，按秒比较）
+  if (!v.poPayAccName) { cfSetErr('poPayAccName', '请输入付款账户名'); ok = false; }
+  if (!v.poPayBank) { cfSetErr('poPayBank', '请选择付款银行'); ok = false; }
+  var cardNo = v.poPayCardNo.replace(/\s/g, '');   // 付款卡号去空格后保存完整卡号
+  if (!cardNo) { cfSetErr('poPayCardNo', '请输入付款卡号'); ok = false; }
+  else if (!/^\d{12,32}$/.test(cardNo)) { cfSetErr('poPayCardNo', '请输入 12–32 位数字付款卡号'); ok = false; }
+  if (!v.poPaySerial) { cfSetErr('poPaySerial', '请输入银行流水号'); ok = false; }
+  if (!v.poPayBankStatus) { cfSetErr('poPayBankStatus', '请选择银行处理状态'); ok = false; }
+  if (!poFiles.pay.length) { poFileErr('pay', '请上传付款凭证'); ok = false; }
+  var normalOk = poPayMode === 'normal' && v.poPayAmount && poPayIsNormalOk(o);
+  if ((poPayMode === 'late' || (poPayMode === 'normal' && !normalOk)) && !v.poPayNote) { cfSetErr('poPayNote', '请输入情况说明'); ok = false; }   // 补报付款、或付款金额 / 银行状态异常时，情况说明必填
+  if (ok && cardNo && v.poPaySerial) {
+    var dup = poFindSerial(cardNo, v.poPaySerial);
+    if (dup === o) { cfSetErr('poPaySerial', '该银行流水已在本订单提交过，不重复计入'); ok = false; }
+    else if (dup) { cfSetErr('poPaySerial', '该银行流水已关联其他订单，不能重复计入；如确有误挂请发起付款异常由平台核实'); ok = false; }
+  }
+  if (!ok) return;
+  // 提交时复核：正常付款若已过付款截止，订单已转申诉中——保留已填写的银行记录，切换为补报，避免静默丢失
+  if (poPayMode === 'normal') {
+    if (payoutTick()) refreshPayoutViews();
+    if (o.status === 'appealed') { poPayMode = 'late'; applyPoPayMode('已超过付款截止时间，订单已转平台核实。已保留你填写的付款信息，可补充情况说明后作为补报付款提交。'); return; }
+    if (!poGuard(o, ['pending_payment'], 'executing')) { closeModal('poPayModal'); return; }
+  } else if (!poGuard(o, ['appealed'])) { closeModal('poPayModal'); return; }
+  var now = Date.now();
+  var rec = { id:'PR-' + o.id.slice(-4) + '-' + (o.records.length + 1), kind:poPayMode, amount:round2(amt), paidAt:new Date(v.poPayTime).getTime(), payerName:v.poPayAccName, payerBank:(PAYOUT_BANKS.filter(function(b){ return b.code === v.poPayBank; })[0] || {}).name, payerBankCode:v.poPayBank, payerCardNo:cardNo,
+    serial:v.poPaySerial, bankStatus:v.poPayBankStatus, files:poFiles.pay.slice(), note:v.poPayNote, by:CUR_OP, at:now };
+  o.records.push(rec);
+  var stText = PO_BANK_STATUS[rec.bankStatus][0];
+  if (poPayMode === 'normal') {
+    o.executionStatus = 'reported';
+    if (normalOk) {
+      o.status = 'pending_confirmation'; o.t2 = now + PO_T2_MIN * 60000;
+      poLog(o, '已付款 ' + poCny(rec.amount) + '，订单进入待确认到账', CUR_OP);
+      showToast('付款记录已提交，订单进入待确认到账');
+    } else {
+      var why = rec.bankStatus !== 'succeeded' ? stText : (rec.amount < o.cny ? '少付' : '多付');
+      o.status = 'appealed';
+      o.appeal = { source:'partner', reason:why + '：实际付款 ' + poCny(rec.amount) + '（' + stText + '）', note:rec.note, created:now, items:[] };
+      poLog(o, '已付款 ' + poCny(rec.amount) + '（' + why + '），订单转入申诉中，由平台核实', CUR_OP);
+      showToast('付款记录已保存，订单转入申诉中由平台核实');
+    }
+  } else {
+    poLog(o, '补报付款 ' + poCny(rec.amount) + '（' + stText + '）', CUR_OP);   // 订单保持申诉中，不生成 T2
+    showToast('补报付款已提交，等待平台核实');
+  }
+  closeModal('poPayModal');
+  refreshPayoutViews();
+}
+
+/* 付款异常：待出款 / 待确认可发起；原因必填，已有银行材料可上传；转申诉中，仅建一份申诉 */
+function openPayoutException(id) {
+  var o = findPayoutOrder(id);
+  if (!poGuard(o, ['pending_payment','pending_confirmation'])) return;
+  poCurId = id;
+  document.getElementById('poExcMeta').innerHTML = poMetaHtml(o);
+  poResetForm(['poExcType','poExcNote'], 'exc');
+  openModal('poExcModal');
+  renderIcons();
+}
+function submitPayoutException() {
+  var type = document.getElementById('poExcType').value, note = document.getElementById('poExcNote').value.trim(), ok = true;
+  if (!type) { cfSetErr('poExcType', '请选择异常类型'); ok = false; }
+  if (!note) { cfSetErr('poExcNote', '请输入异常说明'); ok = false; }
+  if (!ok) return;
+  var o = findPayoutOrder(poCurId);
+  if (!poGuard(o, ['pending_payment','pending_confirmation'])) { closeModal('poExcModal'); return; }
+  var now = Date.now();
+  o.status = 'appealed';
+  o.appeal = { source:'partner', reason:type, note:note, created:now, items:[] };
+  if (poFiles.exc.length) o.appeal.items.push({ party:'partner', time:now, by:CUR_OP, note:'', files:poFiles.exc.slice() });
+  poLog(o, '发起付款异常（' + type + '），订单转入申诉中，由平台核实', CUR_OP);
+  closeModal('poExcModal');
+  refreshPayoutViews();
+  showToast('付款异常已提交，订单转入申诉中');
+}
+
+/* 补充材料：申诉中随时可提交，没有截止时间；说明与附件至少填一项；可多次提交，追加不覆盖 */
+function openPayoutEvidence(id) {
+  var o = findPayoutOrder(id);
+  if (!poGuard(o, ['appealed'])) return;
+  poCurId = id;
+  document.getElementById('poEvidMeta').innerHTML = poMetaHtml(o);
+  poResetForm(['poEvidNote'], 'evid');
+  openModal('poEvidModal');
+  renderIcons();
+}
+function submitPayoutEvidence() {
+  var note = document.getElementById('poEvidNote').value.trim();
+  poFileErr('evid', ''); cfSetErr('poEvidNote', '');
+  if (!poFiles.evid.length && !note) { cfSetErr('poEvidNote', '说明和附件至少填一项'); return; }
+  var o = findPayoutOrder(poCurId);
+  if (!poGuard(o, ['appealed'])) { closeModal('poEvidModal'); return; }
+  var now = Date.now(), n = poFiles.evid.length;
+  o.appeal.items.push({ party:'partner', time:now, by:CUR_OP, note:note, files:poFiles.evid.slice() });
+  poLog(o, '补充材料（' + (note && n ? '说明 + ' + n + ' 个文件' : n ? n + ' 个文件' : '说明') + '）', CUR_OP);
+  closeModal('poEvidModal');
+  refreshPayoutViews();
+  showToast('补充材料已提交，等待平台核实');
+}
+
+/* ── 原型演示：模拟商户 / 平台侧动作，便于走通成功入账与裁定 ── */
+function poDemoHtml(o) {
+  var b = [];
+  if (o.status === 'pending_confirmation' || (o.status === 'appealed' && poHasValidPayment(o))) b.push(['商户确认到账', "demoPoComplete('" + o.id + "','merchant')"]);
+  if (o.status === 'pending_confirmation') b.push(['商户确认立即到期', "demoPoExpire('" + o.id + "','t2')"]);
+  if (o.status === 'pending_accept') b.push(['接单截止立即到期', "demoPoExpire('" + o.id + "','t0')"]);
+  if (o.status === 'pending_payment') b.push(['付款截止立即到期', "demoPoExpire('" + o.id + "','t1')"]);
+  if (o.status === 'appealed') {
+    b.push(['裁定足额到账', "demoPoComplete('" + o.id + "','ruling')"]);
+    b.push(['裁定全额解冻', "demoPoFail('" + o.id + "')"]);
+  }
+  if (!b.length) return '';
+  return '<div class="po-demo"><span class="po-demo-label">原型演示 · 模拟商户 / 平台侧操作（非本后台功能）</span>' + b.map(function(x){ return '<button class="btn btn-default btn-sm" onclick="' + x[1] + '">' + x[0] + '</button>'; }).join('') + '</div>';
+}
+function demoPoComplete(id, src) {   // 成功：服务商总余额 / 可提现 ＋Y，资金明细新增「代付入账」
+  var o = findPayoutOrder(id), now = Date.now();
+  var closeAppeal = o.status === 'appealed' && src === 'merchant';
+  o.status = 'completed'; o.completedAt = now; o.confirmSource = src;
+  poLog(o, PO_CONFIRM[src] + (closeAppeal ? '，申诉关闭' : '') + '，订单成功，代付入账 ' + fmtUSDT(o.y) + ' USDT', src === 'merchant' ? '下单商户' : '平台');
+  applyLedger('payout_credit', o.y, o.id, o.rc, '代付成功入账（' + PO_CONFIRM[src] + '）', fmtDateTime(now));
+  refreshAll();
+  showToast('订单成功，代付入账 ' + fmtUSDT(o.y) + ' USDT');
+}
+function demoPoFail(id) {
+  var o = findPayoutOrder(id);
+  o.status = 'failed'; o.failCode = 'platform_unfreeze'; o.failedAt = Date.now();
+  poLog(o, '平台裁定全额解冻，订单失败', '平台');
+  refreshPayoutViews();
+}
+function demoPoExpire(id, k) {
+  var o = findPayoutOrder(id);
+  o[k] = Date.now() - 1000;
+  refreshPayoutViews();
+}
+var PO_T1_MIN = 30, PO_T2_MIN = 30;   // 付款截止＝接单后 30 分钟；商户确认截止＝有效凭证提交后 30 分钟
+/* 每秒刷新倒计时；到期迁移后重绘列表与详情 */
+setInterval(function(){
+  if (payoutTick()) { renderOverviewPayout(); renderPayoutPending(); if (document.getElementById('pagePayoutOrders').classList.contains('active')) renderPayoutOrders(); if (poDetailId) openPayoutOrderDetail(poDetailId); }
+  document.querySelectorAll('.po-cd').forEach(function(el){ el.innerHTML = poRemainText(+el.dataset.ts); });
+}, 1000);
+
 function refreshAll() {
   renderBalance();
   renderLedgerTable();
@@ -3361,6 +4786,7 @@ function refreshAll() {
   renderCards();
   renderOrders();
   renderOverviewOrders();
+  refreshPayoutViews();
 }
 
 /* =========================================================================
@@ -3375,14 +4801,15 @@ var LOCALE_LIST = [
 var CHROME_I18N = {
   zh_CN: {
     pwdChange:'修改密码', pwdChangeBtn:'修改', pwdOld:'当前密码', pwdOldPh:'请输入当前密码', pwdNew:'新密码', pwdNewPh:'请输入新密码', pwdConfirm:'确认新密码', pwdConfirmPh:'请再次输入新密码', pwdDemoHint:'原型演示：当前密码 Paypaz123，邮箱验证码 123456 视为正确', pwdErrOldEmpty:'请输入当前密码', pwdErrOldWrong:'密码错误', pwdErrLower:'至少包含一个小写字母', pwdErrUpper:'至少包含一个大写字母', pwdErrNum:'至少包含一个数字', pwdErrLen:'8到32个字符', pwdErrMismatch:'密码不一致', pwdErrSame:'新密码不能与原密码相同', pwdOk:'密码更改成功', logoutTitle:'退出登录', logoutDesc:'确定要退出登录吗？', logoutOk:'确定',
-    tfaMsgLocked:'身份验证码错误次数过多，请 30 分钟后再试', tfaMsgGWrong:'身份验证码错误', tfaMsgWdGWrong:'身份验证码错误', tfaMsgEWrong:'验证码错误', tfaMsgSent:'发送成功', tfaMsgCopied:'复制成功', tfaMsgSetOk:'设置成功', tfaMsgUnbindOk:'解绑成功',
+    tfaMsgLocked:'身份验证码错误次数过多，请 30 分钟后再试', tfaMsgGWrong:'身份验证码错误', tfaMsgWdGWrong:'身份验证码错误', tfaMsgEWrong:'验证码错误', tfaMsgSent:'发送成功', tfaMsgCopied:'已复制', tfaMsgSetOk:'设置成功', tfaMsgUnbindOk:'解绑成功',
     PayPazWelcome:'欢迎来到PayPaz', emialOrAccountLabel:'邮箱/账号', passwordLabel:'密码',
     forgotPassword:'忘记密码?', loginBtn:'登录',
     emailPlaceholder:'请输入邮箱或者账号', passwordPlaceholder:'请输入密码',
     emailErr:'请输入邮箱/账号', passwordErr:'请输入密码',
     verifiedTag:'已认证', accountLabel:'个人中心', logoutLabel:'退出登录',
     navOverview:'首页', navWallet:'资产管理', navBalance:'账户资金', navLedger:'资金明细', navFrozen:'冻结明细',
-    navAccounts:'收款卡管理', navRates:'汇率配置', navOrders:'收款订单',
+    navAccounts:'收款卡', navRates:'代收汇率', navOrders:'代收订单', navPayoutOrders:'代付订单',
+    navCollect:'代收', navPayout:'代付', navPayoutRates:'代付汇率', navPayoutChannels:'代付通道',
     navSettings:'系统设置', navMember:'用户与权限',
     pcTitle:'个人中心', tfaName:'身份验证器App', tfaDesc:'在管理资产及其他功能时，请使用验证码。',
     tfaSet:'设置', tfaUnbind:'解绑', tfaNotSet:'暂未设置',
@@ -3403,7 +4830,8 @@ var CHROME_I18N = {
     emailErr:'Please enter your email/account', passwordErr:'Please enter your password',
     verifiedTag:'Verified', accountLabel:'Account', logoutLabel:'Logout',
     navOverview:'Home', navWallet:'Asset Management', navBalance:'Account Funds', navLedger:'Fund Statement', navFrozen:'Frozen Statement',
-    navAccounts:'Collection Cards', navRates:'Exchange Rate', navOrders:'Collection Orders',
+    navAccounts:'Collection Cards', navRates:'Collection Rate', navOrders:'Collection Orders', navPayoutOrders:'Payout Orders',
+    navCollect:'Collection', navPayout:'Payout', navPayoutRates:'Payout Rate', navPayoutChannels:'Payout Channels',
     navSettings:'Settings', navMember:'Users & Permissions',
     pcTitle:'Account', tfaName:'Authenticator App', tfaDesc:'Please use the verification code when managing assets and other functions.',
     tfaSet:'Settings', tfaUnbind:'Unbind', tfaNotSet:'Not configured',
@@ -3543,38 +4971,60 @@ function captchaDragEnd() {
  * - 不提供删除账号，以禁用替代删除
  * - 「系统设置 › 用户与权限」仅主账号可用，不在权限树中分配
  * ========================================================================= */
-const PERM_GROUPS = [
+const PERM_GROUPS = [   // 与侧边栏菜单结构一致：首页 / 资产管理 / 代收 / 代付（系统设置仅主账号，不在权限树中）
   { id:'overview', label:'首页', rows:[
     { id:'overview', label:'首页', items:[ { id:'overview_view', label:'查看' } ] }
-  ]},
-  { id:'accounts', label:'收款卡管理', rows:[
-    { id:'accounts', label:'收款卡管理', items:[
-      { id:'accounts_view',   label:'查看' },
-      { id:'accounts_manage', label:'收款卡新增 / 编辑 / 删除' }   // 无此权限只能查看；启用/禁用在编辑弹窗内完成，归入此权限
-    ]}
-  ]},
-  { id:'orders', label:'收款订单', rows:[
-    { id:'orders', label:'收款订单', items:[
-      { id:'orders_view',    label:'查看' },
-      { id:'orders_verify',  label:'核验/确认收款' },
-      { id:'orders_appeal',  label:'申诉' },
-      { id:'orders_refund',  label:'退款' },
-      { id:'orders_evidence', label:'补充举证' },
-      { id:'orders_export',  label:'订单导出' }
-    ]}
   ]},
   { id:'margin', label:'资产管理', rows:[
     { id:'margin_balance', label:'账户资金', items:[
       { id:'margin_view',     label:'查看' },
       { id:'margin_deposit',  label:'充值' },
-      { id:'margin_withdraw', label:'发起提现' }
+      { id:'margin_withdraw', label:'提现' }
     ]},
-    { id:'margin_ledger', label:'资金明细', items:[ { id:'margin_ledger_view', label:'查看' } ] },
-    { id:'margin_frozen', label:'冻结明细', items:[ { id:'margin_frozen_view', label:'查看' } ] },
-    { id:'margin_export', label:'明细导出', items:[ { id:'margin_ledger_export', label:'导出资金明细 / 冻结明细' } ] },
-    { id:'rates', label:'汇率配置', items:[
+    { id:'margin_ledger', label:'资金明细', items:[
+      { id:'margin_ledger_view',   label:'查看' },
+      { id:'margin_ledger_export', label:'导出' }
+    ]},
+    { id:'margin_frozen', label:'冻结明细', items:[
+      { id:'margin_frozen_view',   label:'查看' },
+      { id:'margin_frozen_export', label:'导出' }
+    ]}
+  ]},
+  { id:'collect', label:'代收', rows:[
+    { id:'orders', label:'代收订单', items:[
+      { id:'orders_view',     label:'查看' },
+      { id:'orders_verify',   label:'核验 / 确认收款' },
+      { id:'orders_appeal',   label:'申诉' },
+      { id:'orders_refund',   label:'退款' },
+      { id:'orders_evidence', label:'举证' },
+      { id:'orders_export',   label:'导出' }
+    ]},
+    { id:'accounts', label:'收款卡', items:[
+      { id:'accounts_view',   label:'查看' },
+      { id:'accounts_manage', label:'新增 / 编辑 / 删除' }   // 启用 / 禁用在编辑弹窗内完成，归入此权限
+    ]},
+    { id:'rates', label:'代收汇率', items:[
       { id:'rates_view', label:'查看' },
       { id:'rates_edit', label:'编辑' }
+    ]}
+  ]},
+  { id:'payout', label:'代付', rows:[   // 独立于代收权限；存量成员不自动获得
+    { id:'payout_orders', label:'代付订单', items:[
+      { id:'payout_orders_view',      label:'查看' },
+      { id:'payout_orders_start',     label:'接单' },
+      { id:'payout_orders_reject',    label:'拒单' },
+      { id:'payout_orders_payment',   label:'付款' },
+      { id:'payout_orders_exception', label:'付款异常' },
+      { id:'payout_orders_evidence',  label:'补充材料' },
+      { id:'payout_orders_export',    label:'导出' }
+    ]},
+    { id:'payout_channels', label:'代付通道', items:[
+      { id:'payout_channels_view', label:'查看' },
+      { id:'payout_channels_edit', label:'新增 / 编辑' }   // 启用 / 禁用在编辑弹窗内完成
+    ]},
+    { id:'payout_rates', label:'代付汇率', items:[
+      { id:'payout_rates_view', label:'查看' },
+      { id:'payout_rates_edit', label:'编辑' }
     ]}
   ]}
 ];
@@ -3582,7 +5032,7 @@ const ALL_PERMS = PERM_GROUPS.flatMap(function(g){ return g.rows.flatMap(functio
 
 const MEMBERS = [
   { id:1, name:'汇泽金融', email:'chen.li@huize-fin.com', role:'owner',  status:'active',   createdAt:'2026-06-15 11:56:04', updatedAt:'2026-06-15 11:56:04', perms: ALL_PERMS.slice() },
-  { id:2, name:'林曦', email:'lin.xi@huize-fin.com',   role:'member', status:'active',   bindGa:true,   createdAt:'2026-07-02 09:20:11', updatedAt:'2026-07-02 09:20:11', perms:['overview_view','orders_view','orders_verify','orders_appeal'] },
+  { id:2, name:'林曦', email:'lin.xi@huize-fin.com',   role:'member', status:'active',   bindGa:true,   createdAt:'2026-07-02 09:20:11', updatedAt:'2026-07-02 09:20:11', perms:['overview_view','orders_view','orders_verify','orders_appeal','payout_orders_view','payout_orders_start','payout_orders_reject','payout_orders_payment','payout_orders_exception','payout_orders_evidence'] },
   { id:3, name:'周涛', email:'zhou.tao@huize-fin.com', role:'member', status:'active',   bindGa:false,   createdAt:'2026-07-02 09:21:40', updatedAt:'2026-08-11 14:02:09', perms:['overview_view','margin_view','margin_ledger_view','margin_frozen_view','margin_withdraw','rates_view','rates_edit'] },
   { id:4, name:'吴倩', email:'wu.qian@huize-fin.com',  role:'member', status:'inactive', createdAt:'2026-09-01 10:00:00', updatedAt:'2026-09-01 10:00:00', perms:[] }
 ];
@@ -4100,6 +5550,12 @@ setupLedgerViews();
 refreshAll();
 renderRates();
 renderRateHistory();
+renderPayoutRates();
+renderPayoutRateHistory();
+setupPayoutChannels();
+applyPayoutNavPerms();
+if (location.hash === '#payout-channels') switchSubPage('pagePayoutChannels','payoutChannels');
+if (location.hash === '#payout-rates') switchSubPage('pagePayoutRates','payoutRates');
 renderMemberList(MEMBERS);
 applyChromeLang();
 renderIcons();
